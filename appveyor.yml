@@ -1,0 +1,11 @@
+os: Visual Studio 2017
+
+build_script:
+ - cmd: dotnet restore src\RethinkDb.Driver.FSharp.fsproj
+ - cmd: dotnet build -v n src\RethinkDb.Driver.FSharp.fsproj
+ - cmd: dotnet pack src\RethinkDb.Driver.FSharp.fsproj -o %CD%\artifacts\nupkg
+ 
+artifacts:
+ - path: artifacts\nupkg\*.nupkg 
+
+tests: off

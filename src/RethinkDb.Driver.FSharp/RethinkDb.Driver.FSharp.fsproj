@@ -1,0 +1,29 @@
+﻿<Project Sdk="FSharp.NET.Sdk;Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net45;netstandard1.6</TargetFrameworks>
+    <Description>Idiomatic F# extentions to the official RethinkDB C# driver</Description>
+    <Authors>Daniel J. Summers</Authors>
+    <PackageLicenseUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp</PackageProjectUrl>
+    <!-- PackageIconUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp/raw/master/icon/icon.png</PackageIconUrl -->
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReleaseNotes>Alpha; use at your own risk</PackageReleaseNotes>
+    <Copyright>See LICENSE</Copyright>
+    <PackageTags>RethinkDB document F#</PackageTags>
+    <VersionPrefix>0.7.0</VersionPrefix>
+    <VersionSuffix>alpha-0001</VersionSuffix>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Functions.fs" />
+    <Compile Include="Config.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="4.2.*" />
+    <PackageReference Include="FSharp.NET.Sdk" Version="1.0.*" PrivateAssets="All" />
+    <PackageReference Include="RethinkDb.Driver" Version="2.*" />
+  </ItemGroup>
+
+</Project>
