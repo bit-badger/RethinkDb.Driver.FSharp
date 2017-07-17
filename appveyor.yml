@@ -8,4 +8,4 @@ build_script:
 artifacts:
  - path: artifacts\nupkg\*.nupkg 
 
-tests: off
+test: off
