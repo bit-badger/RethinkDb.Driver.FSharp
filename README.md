@@ -55,7 +55,7 @@ let post = fetchPost "the-post-id" conn |> Async.RunSynchronously
 
 ```fsharp
 // Function names cannot be polymorphic the way object-oriented methods can, so filter's three overloads become
-filter r.HashMap("age", 30)
+filter (r.HashMap ("age", 30))
 // and
 filterFunc (fun row -> row.["age"].Eq(30))
 // and

@@ -65,6 +65,15 @@ let indexCreate indexName conn (table : Ast.Table) =
   table.IndexCreate indexName
   |> asyncReqlResult conn
 
+/// Create an index on the given table using a function
+let indexCreateFunc indexName (f : Ast.ReqlExpr -> obj) conn (table : Ast.Table) =
+  table.IndexCreate (indexName, Ast.ReqlFunction1 f)
+  |> asyncReqlResult conn
+
+let indexCreateJS indexName jsString conn (table : Ast.Table) =
+  table.IndexCreate (indexName, Ast.Javascript (jsString :> obj))
+  |> asyncReqlResult conn
+
 /// Get a document by its primary key
 let get documentId (table : Ast.Table) =
   table.Get documentId
