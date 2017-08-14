@@ -59,10 +59,6 @@ let dbList conn =
   r.DbList ()
   |> asyncResult<string list> conn
 
-/// Reference the default database
-let defaultDb =
-  (fun () -> r.Db ()) ()
-
 /// Delete documents
 let delete (expr : ReqlExpr) =
   expr.Delete ()
@@ -266,21 +262,36 @@ let table tableName (db : Db) =
 
 /// Return all documents in a table from the default database (may be further refined)
 let fromTable tableName =
-  table tableName defaultDb
+  r.Table tableName
 
 /// Create a table in the given database
 let tableCreate tableName conn (db : Db) =
   db.TableCreate tableName
   |> asyncReqlResult conn
 
-/// Drop a table
+/// Create a table in the connection-default database
+let tableCreateInDefault tableName conn =
+  r.TableCreate tableName
+  |> asyncReqlResult conn
+
+/// Drop a table in the given database
 let tableDrop tableName conn (db : Db) =
   db.TableDrop tableName
+  |> asyncReqlResult conn
+
+/// Drop a table from the connection-default database
+let tableDropFromDefault tableName conn =
+  r.TableDrop tableName
   |> asyncReqlResult conn
 
 /// Get a list of tables for the given database
 let tableList conn (db : Db) =
   db.TableList ()
+  |> asyncResult<string list> conn
+
+/// Get a list of tables from the connection-default database
+let tableListFromDefault conn =
+  r.TableList ()
   |> asyncResult<string list> conn
 
 /// Update documents
