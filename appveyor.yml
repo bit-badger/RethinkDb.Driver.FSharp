@@ -1,4 +1,4 @@
-os: Visual Studio 2017
+os: Visual Studio 2022
 
 build_script:
  - cmd: dotnet restore src\RethinkDb.Driver.FSharp.sln
@@ -9,6 +9,3 @@ artifacts:
  - path: artifacts\nupkg\*.nupkg 
 
 test: off
-
-hosts:
-  api.nuget.org: 93.184.221.200
