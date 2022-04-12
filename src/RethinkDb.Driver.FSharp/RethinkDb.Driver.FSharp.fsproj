@@ -1,7 +1,7 @@
-﻿<Project Sdk="FSharp.NET.Sdk;Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net45;netstandard1.6</TargetFrameworks>
+    <TargetFrameworks>net6.0</TargetFrameworks>
     <Description>Idiomatic F# extentions to the official RethinkDB C# driver</Description>
     <Authors>Daniel J. Summers</Authors>
     <PackageLicenseUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp/blob/master/LICENSE</PackageLicenseUrl>
@@ -11,19 +11,19 @@
     <PackageReleaseNotes>Alpha; use at your own risk</PackageReleaseNotes>
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
-    <VersionPrefix>0.7.0</VersionPrefix>
-    <VersionSuffix>alpha-0004</VersionSuffix>
+    <VersionPrefix>0.7.1</VersionPrefix>
+    <VersionSuffix>alpha-0001</VersionSuffix>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Builder.fs" />
     <Compile Include="Functions.fs" />
     <Compile Include="Config.fs" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FSharp.Core" Version="4.*" />
-    <PackageReference Include="FSharp.NET.Sdk" Version="1.0.*" PrivateAssets="All" />
-    <PackageReference Include="Newtonsoft.Json" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="6.0.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="RethinkDb.Driver" Version="2.*" />
   </ItemGroup>
 

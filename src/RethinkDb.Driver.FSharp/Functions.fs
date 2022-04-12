@@ -14,7 +14,7 @@ let asyncCursor<'T> conn (expr : ReqlExpr) =
 
 /// Get the result of a non-select ReQL expression
 let asyncReqlResult conn (expr : ReqlExpr) =
-  expr.RunResultAsync conn
+  expr.RunWriteAsync conn
   |> Async.AwaitTask
 
 /// Get the results of an expression
