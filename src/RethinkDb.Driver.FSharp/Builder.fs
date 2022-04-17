@@ -11,6 +11,9 @@ open System.Threading.Tasks
 /// Computation Expression builder for RethinkDB queries
 type RethinkBuilder<'T> () =
     
+    /// Await a Task (avoids using the task CE when we may raise exceptions)
+    let await = Async.AwaitTask >> Async.RunSynchronously
+
     /// Create a RethinkDB hash map of the given field/value pairs
     let fieldsToMap (fields : (string * obj) list) =
         fields
@@ -211,9 +214,11 @@ type RethinkBuilder<'T> () =
     /// Perform a write operation
     [<CustomOperation "write">]
     member _.Write (expr : ReqlExpr) : IConnection -> Task<Model.Result> =
-        fun conn -> task {
-            return! expr.RunWriteAsync conn
-        }
+        fun conn ->
+            let result = expr.RunWriteAsync conn |> await
+            match result.Errors with
+            | 0UL -> Task.FromResult result
+            | _ -> raise <| ReqlRuntimeError result.FirstError
 
     /// Perform a write operation
     [<CustomOperation "write">]
