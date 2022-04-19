@@ -12,7 +12,7 @@
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
     <VersionPrefix>0.8.0</VersionPrefix>
-    <VersionSuffix>alpha-0002</VersionSuffix>
+    <VersionSuffix>alpha-0003</VersionSuffix>
   </PropertyGroup>
 
   <ItemGroup>
