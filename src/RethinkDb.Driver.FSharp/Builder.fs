@@ -18,6 +18,14 @@ type RethinkBuilder<'T> () =
         fields
         |> List.fold (fun (m : Model.MapObject) item -> m.With (fst item, snd item)) (RethinkDB.R.HashMap ())
     
+    /// Split a table name with a "." separator into database and table parts
+    let dbAndTable (table : string) =
+        match table.Contains "." with
+        | true ->
+            let parts = table.Split '.'
+            Some parts[0], parts[1]
+        | false -> None, table
+    
     member _.Bind (expr : ReqlExpr, f : ReqlExpr -> ReqlExpr) = f expr
   
     member this.For (expr, f) = this.Bind (expr, f)
@@ -28,15 +36,14 @@ type RethinkBuilder<'T> () =
     
     /// Specify a database for further commands
     [<CustomOperation "withDb">]
-    member _.Db (expr : RethinkDB, db : string) = match db with "" -> expr.Db () | _ -> expr.Db db
+    member _.Db (r : RethinkDB, db : string) = match db with "" -> r.Db () | _ -> r.Db db
     
-    /// Specify a table in the default database
+    /// Identify a table (of form "dbName.tableName"; if no db name, uses default database)
     [<CustomOperation "withTable">]
-    member _.TableInDefaultDb (expr : RethinkDB, table : string) = expr.Table table
-    
-    /// Specify a table in a specific database
-    [<CustomOperation "withTable">]
-    member _.Table (db : Db, table : string) = db.Table table
+    member this.Table (r : RethinkDB, table : string) =
+        match dbAndTable table with
+        | Some db, tbl -> this.Db(r, db).Table tbl
+        | None, _ -> r.Table table
     
     /// Create an equality join with another table
     [<CustomOperation "eqJoin">]
@@ -61,13 +68,12 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "tableList">]
     member this.TableList (r : RethinkDB, db : string) = this.Db(r, db).TableList ()
     
-    /// Create a table in the default database
+    /// Create a table (of form "dbName.tableName"; if no db name, uses default database)
     [<CustomOperation "tableCreate">]
-    member _.TableCreate (r : RethinkDB, table : string) = r.TableCreate table
-    
-    /// Create a table in the default database
-    [<CustomOperation "tableCreate">]
-    member _.TableCreate (db : Db, table : string) = db.TableCreate table
+    member this.TableCreate (r : RethinkDB, table : string) =
+        match dbAndTable table with
+        | Some db, tbl -> this.Db(r, db).TableCreate tbl
+        | None, _ -> r.TableCreate table
     
     /// List all indexes for a table
     [<CustomOperation "indexList">]

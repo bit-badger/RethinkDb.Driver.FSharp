@@ -1,7 +1,7 @@
 # RethinkDb.Driver.FSharp
 Idiomatic F# extensions for the C# RethinkDB driver
 
-![Nuget (with prereleases)](https://img.shields.io/nuget/vpre/RethinkDb.Driver.FSharp)
+[![Nuget (with prereleases)](https://img.shields.io/nuget/vpre/RethinkDb.Driver.FSharp)](https://www.nuget.org/packages/RethinkDb.Driver.FSharp/)
 
 ## Using
 
@@ -28,7 +28,7 @@ let fetchPost (postId : string) =
 /// string -> (IConnection -> Task<Post>)
 let fetchPost (postId : string) =
     rethink<Post> {
-        withTableInDb "Post" "Blog"
+        withTable "Blog.Post"
         get postId
         result
         withRetryDefault
