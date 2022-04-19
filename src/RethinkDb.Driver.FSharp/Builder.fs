@@ -1,12 +1,18 @@
 ﻿[<AutoOpen>]
 module RethinkDb.Driver.FSharp.RethinkBuilder
 
-open Polly
 open RethinkDb.Driver
 open RethinkDb.Driver.Ast
 open RethinkDb.Driver.Net
-open System
 open System.Threading.Tasks
+
+/// Options for RethinkDB indexes
+type IndexOption =
+    /// Index multiple values in the given field
+    | Multi
+    /// Create a geospatial index
+    | Geospatial
+
 
 /// Computation Expression builder for RethinkDB queries
 type RethinkBuilder<'T> () =
@@ -19,20 +25,6 @@ type RethinkBuilder<'T> () =
         fields
         |> List.fold (fun (m : Model.MapObject) item -> m.With (fst item, snd item)) (RethinkDB.R.HashMap ())
     
-    /// Create a retry policy that attempts to reconnect to RethinkDB on each retry
-    let retryPolicy (intervals : float seq) (conn : IConnection) =
-        Policy
-            .Handle<ReqlDriverError>()
-            .WaitAndRetryAsync(
-                intervals |> Seq.map TimeSpan.FromSeconds,
-                System.Action<exn, TimeSpan, int, Context> (fun ex _ _ _ ->
-                    printf $"Encountered RethinkDB exception: {ex.Message}"
-                    match ex.Message.Contains "socket" with
-                    | true ->
-                        printf "Reconnecting to RethinkDB"
-                        (conn :?> Connection).Reconnect false
-                    | false -> ()))
-
     member _.Bind (expr : ReqlExpr, f : ReqlExpr -> ReqlExpr) = f expr
   
     member this.For (expr, f) = this.Bind (expr, f)
@@ -76,6 +68,11 @@ type RethinkBuilder<'T> () =
     /// Create an index for a table, using a function to calculate the index
     [<CustomOperation "indexCreate">]
     member _.IndexCreate (tbl : Table, index : string, f : ReqlExpr -> obj) = tbl.IndexCreate (index, ReqlFunction1 f)
+    
+    /// Specify options for certain types of indexes
+    [<CustomOperation "indexOption">]
+    member _.IndexOption (idx : IndexCreate, opt : IndexOption) =
+         idx.OptArg ((match opt with Multi -> "multi" | Geospatial -> "geo"), true)
     
     // database/table identification
     
@@ -189,7 +186,7 @@ type RethinkBuilder<'T> () =
     /// Execute the query, returning the result of the type specified
     [<CustomOperation "result">]
     member _.Result (expr : ReqlExpr) : IConnection -> Task<'T> = 
-        fun conn -> task {
+        fun conn -> backgroundTask {
             return! expr.RunResultAsync<'T> conn
         }
     
@@ -201,7 +198,7 @@ type RethinkBuilder<'T> () =
     /// Execute the query, returning the result of the type specified, or None if no result is found
     [<CustomOperation "resultOption">]
     member _.ResultOption (expr : ReqlExpr) : IConnection -> Task<'T option> = 
-        fun conn -> task {
+        fun conn -> backgroundTask {
             let! result = expr.RunResultAsync<'T> conn
             return match (box >> isNull) result with true -> None | false -> Some result
         }
@@ -227,9 +224,9 @@ type RethinkBuilder<'T> () =
 
     /// Ignore the result of an operation
     [<CustomOperation "ignoreResult">]
-    member _.IgnoreResult (f : IConnection -> Task<'T>) =
+    member _.IgnoreResult<'T> (f : IConnection -> Task<'T>) =
         fun conn -> task {
-            let! _ = f conn
+            let! _ = (f conn).ConfigureAwait false
             ()
         }
 
@@ -237,7 +234,7 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "ignoreResult">]
     member _.IgnoreResult (f : IConnection -> Task<'T option>) =
         fun conn -> task {
-            let! _ = f conn
+            let! _ = (f conn).ConfigureAwait false
             ()
         }
 
@@ -256,16 +253,12 @@ type RethinkBuilder<'T> () =
     /// Retries a variable number of times, waiting each time for the seconds specified
     [<CustomOperation "withRetry">]
     member _.WithRetry (f : IConnection -> Task<'T>, retries) =
-        fun conn -> task {
-            return! (retryPolicy retries conn).ExecuteAsync(fun () -> f conn)
-        }
+        Retry.withRetry f retries
 
     /// Retries a variable number of times, waiting each time for the seconds specified
     [<CustomOperation "withRetry">]
     member _.WithRetry (f : IConnection -> Task<'T option>, retries) =
-        fun conn -> task {
-            return! (retryPolicy retries conn).ExecuteAsync(fun () -> f conn)
-        }
+        Retry.withRetry f retries
 
     /// Retries a variable number of times, waiting each time for the seconds specified
     [<CustomOperation "withRetry">]
@@ -279,43 +272,43 @@ type RethinkBuilder<'T> () =
    
     /// Retries at 200ms, 500ms, and 1s
     [<CustomOperation "withRetryDefault">]
-    member this.WithRetryDefault (f : IConnection -> Task<'T>) =
-        this.WithRetry (f, [ 0.2; 0.5; 1.0 ])
+    member _.WithRetryDefault (f : IConnection -> Task<'T>) =
+        Retry.withRetryDefault f
 
     /// Retries at 200ms, 500ms, and 1s
     [<CustomOperation "withRetryDefault">]
-    member this.WithRetryDefault (f : IConnection -> Task<'T option>) =
-        this.WithRetry (f, [ 0.2; 0.5; 1.0 ])
+    member _.WithRetryDefault (f : IConnection -> Task<'T option>) =
+        Retry.withRetryDefault f
 
     /// Retries at 200ms, 500ms, and 1s
     [<CustomOperation "withRetryDefault">]
     member this.WithRetryDefault (f : IConnection -> Task<'T>, conn) =
-        this.WithRetry (f, [ 0.2; 0.5; 1.0 ]) conn
+        this.WithRetryDefault f conn
 
     /// Retries at 200ms, 500ms, and 1s
     [<CustomOperation "withRetryDefault">]
     member this.WithRetryDefault (f : IConnection -> Task<'T option>, conn) =
-        this.WithRetry (f, [ 0.2; 0.5; 1.0 ]) conn
+        this.WithRetryDefault f conn
 
     /// Retries once immediately
     [<CustomOperation "withRetryOnce">]
-    member this.WithRetryOnce (f : IConnection -> Task<'T>) =
-        this.WithRetry (f, [ 0.0 ])
+    member _.WithRetryOnce (f : IConnection -> Task<'T>) =
+        Retry.withRetryOnce f
 
     /// Retries once immediately
     [<CustomOperation "withRetryOnce">]
-    member this.WithRetryOnce (f : IConnection -> Task<'T option>) =
-        this.WithRetry (f, [ 0.0 ])
+    member _.WithRetryOnce (f : IConnection -> Task<'T option>) =
+        Retry.withRetryOnce f
 
     /// Retries once immediately
     [<CustomOperation "withRetryOnce">]
     member this.WithRetryOnce (f : IConnection -> Task<'T>, conn) =
-        this.WithRetry (f, [ 0.0 ]) conn
+        this.WithRetryOnce f conn
 
     /// Retries once immediately
     [<CustomOperation "withRetryOnce">]
     member this.WithRetryOnce (f : IConnection -> Task<'T option>, conn) =
-        this.WithRetry (f, [ 0.0 ]) conn
+        this.WithRetryOnce f conn
 
 
 /// RethinkDB computation expression

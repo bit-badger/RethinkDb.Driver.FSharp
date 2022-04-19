@@ -1,21 +1,22 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net6.0</TargetFrameworks>
-    <Description>Idiomatic F# extentions to the official RethinkDB C# driver</Description>
+    <TargetFrameworks>net6.0;netstandard2.0</TargetFrameworks>
+    <Description>Idiomatic F# extensions on the official RethinkDB C# driver</Description>
     <Authors>Daniel J. Summers</Authors>
-    <PackageLicenseUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp</PackageProjectUrl>
     <!-- PackageIconUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp/raw/master/icon/icon.png</PackageIconUrl -->
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageReleaseNotes>Alpha; use at your own risk</PackageReleaseNotes>
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
-    <VersionPrefix>0.7.1</VersionPrefix>
+    <VersionPrefix>0.8.0</VersionPrefix>
     <VersionSuffix>alpha-0001</VersionSuffix>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Retry.fs" />
     <Compile Include="Builder.fs" />
     <Compile Include="Functions.fs" />
     <Compile Include="Config.fs" />

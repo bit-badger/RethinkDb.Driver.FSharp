@@ -17,24 +17,25 @@ The goal is to provide:
 - A composable pipeline for creating ReQL statements:
 
 ```fsharp
-/// string -> (IConnection -> Async<Post>)
+/// string -> (IConnection -> Task<Post>)
 let fetchPost (postId : string) =
-  fromDb "Blog"
-  |> table "Post"
-  |> get postId
-  |> asyncResult<Post>
+    fromDb "Blog"
+    |> table "Post"
+    |> get postId
+    |> runResult<Post>
+    |> withRetryDefault
 ```
 
 - An F# domain-specific language (DSL) using a `rethink` computation expression:
 
 ```fsharp
-/// string -> (IConnection -> Async<Post>)
+/// string -> (IConnection -> Task<Post>)
 let fetchPost (postId : string) =
-  rethink {
-    fromDb "Blog"
-    table "Post"
-    get postId
-    asyncResult<Post>
+    rethink<Post> {
+        withTableInDb "Post" "Blog"
+        get postId
+        result
+        withRetryDefault
     }
 ```
 
