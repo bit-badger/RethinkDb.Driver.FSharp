@@ -1,10 +1,7 @@
 # RethinkDb.Driver.FSharp
 Idiomatic F# extensions for the C# RethinkDB driver
 
-## Licensing
-
-While no specific additional license restrictions exist for this project, there are modifications to the Apache v2
-license on this project's dependencies. Please see [the heading on the C# driver page][license] for details.
+![Nuget (with prereleases)](https://img.shields.io/nuget/vpre/RethinkDb.Driver.FSharp)
 
 ## Using
 
@@ -74,6 +71,12 @@ filterFunc (fun row -> row.["age"].Eq(30))
 // and
 filterJS "function (row) { return 30 == row['age'] }"
 ```
+
+## Licensing
+
+While no specific additional license restrictions exist for this project, there are modifications to the Apache v2
+license on this project's dependencies. Please see [the heading on the C# driver page][license] for details.
+
 ---
 
 If you are using the project, feel free to file issues about your pain points; there is no substitute for real-world feedback!
