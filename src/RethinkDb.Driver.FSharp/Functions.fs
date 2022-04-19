@@ -47,13 +47,12 @@ let between (lowerKey : obj) (upperKey : obj) (expr : ReqlExpr) =
     expr.Between (lowerKey, upperKey)
 
 /// Get document between a lower bound and an upper bound, specifying one or more optional arguments
-let betweenWithOptArgs (lowerKey : obj) (upperKey : obj) (args : (string * obj) seq) (expr : ReqlExpr) =
-    args
-    |> Seq.fold (fun (btw : Between) arg -> btw.OptArg (fst arg, snd arg)) (between lowerKey upperKey expr)
+let betweenWithOptArgs (lowerKey : obj) (upperKey : obj) args expr =
+    between lowerKey upperKey expr |> BetweenOptArg.apply args
 
 /// Get documents between a lower bound and an upper bound based on an index
-let betweenIndex (lowerKey : obj) (upperKey : obj) (index : string) (expr : ReqlExpr) =
-    betweenWithOptArgs lowerKey upperKey [ "index", index ] expr
+let betweenIndex (lowerKey : obj) (upperKey : obj) index expr =
+    betweenWithOptArgs lowerKey upperKey [ Index index ] expr
 
 /// Get a connection builder that can be used to create one RethinkDB connection
 let connection () =
@@ -61,7 +60,7 @@ let connection () =
 
 /// Reference a database
 let db dbName =
-    r.Db dbName
+    match dbName with "" -> r.Db () | _ -> r.Db dbName
 
 /// Create a database
 let dbCreate (dbName : string) =
@@ -80,8 +79,8 @@ let delete (expr : ReqlExpr) =
     expr.Delete ()
 
 /// Delete documents, providing optional arguments
-let deleteWithOptArgs (args : (string * obj) seq) expr =
-    args |> Seq.fold (fun (del : Delete) arg -> del.OptArg (fst arg, snd arg)) (delete expr)
+let deleteWithOptArgs args (expr : ReqlExpr) =
+    delete expr |> DeleteOptArg.apply args
 
 /// EqJoin the left field on the right-hand table using its primary key
 let eqJoin (field : string) (table : Table) (expr : ReqlExpr) =
@@ -111,49 +110,65 @@ let eqJoinJSIndex js table (indexName : string) expr =
 let filter (filterSpec : obj) (expr : ReqlExpr) =
     expr.Filter filterSpec
 
-/// Apply optional arguments to a filter
-let private optArgsFilter (args : (string * obj) seq) filter =
-    args |> Seq.fold (fun (fil : Filter) arg -> fil.OptArg (fst arg, snd arg)) filter
+/// Apply optional argument to a filter
+let private optArgFilter arg (filter : Filter) =
+    filter.OptArg (match arg with Default d -> d.reql)
   
 /// Filter documents, providing optional arguments
-let filterWithOptArgs (filterSpec : obj) args expr =
-    filter filterSpec expr |> optArgsFilter args
+let filterWithOptArgs (filterSpec : obj) arg expr =
+    filter filterSpec expr |> optArgFilter arg
 
 /// Filter documents using a function
 let filterFunc<'T> (f : ReqlExpr -> 'T) (expr : ReqlExpr) =
     expr.Filter (ReqlFunction1 (fun row -> f row :> obj))
 
 /// Filter documents using a function, providing optional arguments
-let filterFuncWithOptArgs<'T> (f : ReqlExpr -> 'T) args expr =
-    filterFunc f expr |> optArgsFilter args
+let filterFuncWithOptArgs<'T> (f : ReqlExpr -> 'T) arg expr =
+    filterFunc f expr |> optArgFilter arg
 
 /// Filter documents using JavaScript
 let filterJS js (expr : ReqlExpr) =
     expr.Filter (toJS js)
 
 /// Filter documents using JavaScript, providing optional arguments
-let filterJSWithOptArgs js args expr =
-    filterJS js expr |> optArgsFilter args
+let filterJSWithOptArgs js arg expr =
+    filterJS js expr |> optArgFilter arg
 
 /// Get a document by its primary key
 let get (documentId : obj) (table : Table) =
     table.Get documentId
 
+/// Get all documents matching primary keys
+let getAll (ids : obj seq) (table : Table) =
+    table.GetAll (Array.ofSeq ids)
+
 /// Get all documents matching keys in the given index
-let getAll (ids : obj seq) (indexName : string) (table : Table) =
-    table.GetAll(Array.ofSeq ids).OptArg ("index", indexName)
+let getAllWithIndex (ids : obj seq) (indexName : string) table =
+    (getAll ids table).OptArg ("index", indexName)
 
 /// Create an index on the given table
 let indexCreate (indexName : string) (table : Table) =
     table.IndexCreate indexName
 
+/// Create an index on the given table, including optional arguments
+let indexCreateWithOptArgs (indexName : string) args (table : Table) =
+    indexCreate indexName table |> IndexCreateOptArg.apply args
+
 /// Create an index on the given table using a function
 let indexCreateFunc<'T> (indexName : string) (f : ReqlExpr -> 'T) (table : Table) =
     table.IndexCreate (indexName, ReqlFunction1 (fun row -> f row :> obj))
 
+/// Create an index on the given table using a function, including optional arguments
+let indexCreateFuncWithOptArgs<'T> indexName (f : ReqlExpr -> 'T) args table =
+    indexCreateFunc indexName f table |> IndexCreateOptArg.apply args
+
 /// Create an index on the given table using JavaScript
 let indexCreateJS (indexName : string) js (table : Table) =
     table.IndexCreate (indexName, toJS js)
+
+/// Create an index on the given table using JavaScript, including optional arguments
+let indexCreateJSWithOptArgs indexName js args table =
+    indexCreateJS indexName js table |> IndexCreateOptArg.apply args
 
 /// Drop an index
 let indexDrop (indexName : string) (table : Table) =
@@ -179,10 +194,6 @@ let innerJoinFunc<'T> (otherSeq : obj) (f : ReqlExpr -> ReqlExpr -> 'T) (expr : 
 let innerJoinJS (otherSeq : obj) js (expr : ReqlExpr) =
     expr.InnerJoin (otherSeq, toJS js)
 
-/// Apply optional arguments to an insert
-let private optArgsInsert (args : (string * obj) seq) ins =
-    args |> Seq.fold (fun (ins : Insert) arg -> ins.OptArg (fst arg, snd arg)) ins
-
 /// Insert a single document (use insertMany for multiple)
 let insert<'T> (doc : 'T) (table : Table) =
     table.Insert doc
@@ -193,11 +204,11 @@ let insertMany<'T> (docs : 'T seq) (table : Table) =
 
 /// Insert a single document, providing optional arguments (use insertManyWithOptArgs for multiple)
 let insertWithOptArgs<'T> (doc : 'T) args table =
-    insert doc table |> optArgsInsert args
+    insert doc table |> InsertOptArg.apply args
 
 /// Insert multiple documents, providing optional arguments
 let insertManyWithOptArgs<'T> (docs : 'T seq) args table =
-    insertMany docs table |> optArgsInsert args
+    insertMany docs table |> InsertOptArg.apply args
 
 /// Test whether a sequence is empty
 let isEmpty (expr : ReqlExpr) =
@@ -223,17 +234,13 @@ let outerJoinJS (otherSeq : obj) js (expr : ReqlExpr) =
 let pluck (fields : string seq) (expr : ReqlExpr) =
     expr.Pluck (Array.ofSeq fields)
 
-/// Apply optional arguments to a replace
-let private optArgsReplace (args : (string * obj) seq) repl =
-    args |> Seq.fold (fun (rep : Replace) arg -> rep.OptArg (fst arg, snd arg)) repl
-
 /// Replace documents
 let replace<'T> (replaceSpec : 'T) (expr : ReqlExpr) =
     expr.Replace replaceSpec
 
 /// Replace documents, providing optional arguments
 let replaceWithOptArgs<'T> (replaceSpec : 'T) args expr =
-    replace replaceSpec expr |> optArgsReplace args
+    replace replaceSpec expr |> ReplaceOptArg.apply args
 
 /// Replace documents using a function
 let replaceFunc<'T> (f : ReqlExpr -> 'T) (expr : ReqlExpr) =
@@ -241,7 +248,7 @@ let replaceFunc<'T> (f : ReqlExpr -> 'T) (expr : ReqlExpr) =
 
 /// Replace documents using a function, providing optional arguments
 let replaceFuncWithOptArgs<'T> (f : ReqlExpr -> 'T) args expr =
-    replaceFunc f expr |> optArgsReplace args
+    replaceFunc f expr |> ReplaceOptArg.apply args
 
 /// Replace documents using JavaScript
 let replaceJS js (expr : ReqlExpr) =
@@ -249,7 +256,7 @@ let replaceJS js (expr : ReqlExpr) =
 
 /// Replace documents using JavaScript, providing optional arguments
 let replaceJSWithOptArgs js args expr =
-    replaceJS js expr |> optArgsReplace args
+    replaceJS js expr |> ReplaceOptArg.apply args
 
 /// Skip a number of elements from the head of a sequence
 let skip n (expr : ReqlExpr) =
@@ -291,17 +298,13 @@ let tableList (db : Db) =
 let tableListFromDefault () =
     r.TableList ()
 
-/// Apply optional arguments to an update
-let private optArgsUpdate (args : (string * obj) seq) upd =
-    args |> Seq.fold (fun (upd : Update) arg -> upd.OptArg (fst arg, snd arg)) upd
-
 /// Update documents
 let update<'T> (updateSpec : 'T) (expr : ReqlExpr) =
     expr.Update updateSpec
 
 /// Update documents, providing optional arguments
 let updateWithOptArgs<'T> (updateSpec : 'T) args expr =
-    update updateSpec expr |> optArgsUpdate args
+    update updateSpec expr |> UpdateOptArg.apply args
 
 /// Update documents using a function
 let updateFunc<'T> (f : ReqlExpr -> 'T) (expr : ReqlExpr) =
@@ -309,7 +312,7 @@ let updateFunc<'T> (f : ReqlExpr -> 'T) (expr : ReqlExpr) =
 
 /// Update documents using a function, providing optional arguments
 let updateFuncWithOptArgs<'T> (f : ReqlExpr -> 'T) args expr =
-    updateFunc f expr |> optArgsUpdate args
+    updateFunc f expr |> UpdateOptArg.apply args
 
 /// Update documents using JavaScript
 let updateJS js (expr : ReqlExpr) =
@@ -317,7 +320,7 @@ let updateJS js (expr : ReqlExpr) =
 
 /// Update documents using JavaScript, providing optional arguments
 let updateJSWithOptArgs js args expr =
-    updateJS js expr |> optArgsUpdate args
+    updateJS js expr |> UpdateOptArg.apply args
 
 /// Exclude fields from the result
 let without (columns : string seq) (expr : ReqlExpr) =

@@ -12,11 +12,12 @@
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
     <VersionPrefix>0.8.0</VersionPrefix>
-    <VersionSuffix>alpha-0001</VersionSuffix>
+    <VersionSuffix>alpha-0002</VersionSuffix>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="Retry.fs" />
+    <Compile Include="OptArgs.fs" />
     <Compile Include="Builder.fs" />
     <Compile Include="Functions.fs" />
     <Compile Include="Config.fs" />

@@ -3,16 +3,9 @@ module RethinkDb.Driver.FSharp.RethinkBuilder
 
 open RethinkDb.Driver
 open RethinkDb.Driver.Ast
+open RethinkDb.Driver.FSharp
 open RethinkDb.Driver.Net
 open System.Threading.Tasks
-
-/// Options for RethinkDB indexes
-type IndexOption =
-    /// Index multiple values in the given field
-    | Multi
-    /// Create a geospatial index
-    | Geospatial
-
 
 /// Computation Expression builder for RethinkDB queries
 type RethinkBuilder<'T> () =
@@ -31,6 +24,25 @@ type RethinkBuilder<'T> () =
     
     member _.Yield _ = RethinkDB.R
     
+    // database/table identification
+    
+    /// Specify a database for further commands
+    [<CustomOperation "withDb">]
+    member _.Db (expr : RethinkDB, db : string) = match db with "" -> expr.Db () | _ -> expr.Db db
+    
+    /// Specify a table in the default database
+    [<CustomOperation "withTable">]
+    member _.TableInDefaultDb (expr : RethinkDB, table : string) = expr.Table table
+    
+    /// Specify a table in a specific database
+    [<CustomOperation "withTable">]
+    member _.Table (db : Db, table : string) = db.Table table
+    
+    /// Create an equality join with another table
+    [<CustomOperation "eqJoin">]
+    member _.EqJoin (expr : ReqlExpr, field : string, otherTable : string) =
+        expr.EqJoin (field, RethinkDB.R.Table otherTable)
+    
     // meta queries (tables, indexes, etc.)
     
     /// List all databases
@@ -46,16 +58,16 @@ type RethinkBuilder<'T> () =
     member _.TableList (r : RethinkDB) = r.TableList ()
     
     /// List all tables for the specified database
-    [<CustomOperation "tableListWithDb">]
-    member _.TableListWithDb (r : RethinkDB, db : string) = r.Db(db).TableList ()
+    [<CustomOperation "tableList">]
+    member this.TableList (r : RethinkDB, db : string) = this.Db(r, db).TableList ()
     
     /// Create a table in the default database
     [<CustomOperation "tableCreate">]
     member _.TableCreate (r : RethinkDB, table : string) = r.TableCreate table
     
     /// Create a table in the default database
-    [<CustomOperation "tableCreateWithDb">]
-    member _.TableCreateWithDb (r : RethinkDB, table : string, db : string) = r.Db(db).TableCreate table
+    [<CustomOperation "tableCreate">]
+    member _.TableCreate (db : Db, table : string) = db.TableCreate table
     
     /// List all indexes for a table
     [<CustomOperation "indexList">]
@@ -65,44 +77,35 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "indexCreate">]
     member _.IndexCreate (tbl : Table, index : string) = tbl.IndexCreate index
     
+    /// Create an index for a table, specifying an optional argument
+    [<CustomOperation "indexCreate">]
+    member this.IndexCreate (tbl : Table, index : string, opts : IndexCreateOptArg list) =
+        this.IndexCreate (tbl, index) |> IndexCreateOptArg.apply opts
+    
     /// Create an index for a table, using a function to calculate the index
     [<CustomOperation "indexCreate">]
     member _.IndexCreate (tbl : Table, index : string, f : ReqlExpr -> obj) = tbl.IndexCreate (index, ReqlFunction1 f)
     
-    /// Specify options for certain types of indexes
-    [<CustomOperation "indexOption">]
-    member _.IndexOption (idx : IndexCreate, opt : IndexOption) =
-         idx.OptArg ((match opt with Multi -> "multi" | Geospatial -> "geo"), true)
-    
-    // database/table identification
-    
-    /// Specify a database for further commands
-    [<CustomOperation "withDb">]
-    member _.Db (expr : RethinkDB, db : string) = expr.Db db
-    
-    /// Specify a table in the default database
-    [<CustomOperation "withTable">]
-    member _.TableInDefaultDb (expr : RethinkDB, table : string) = expr.Table table
-    
-    /// Specify a table in a specific database
-    [<CustomOperation "withTableInDb">]
-    member _.Table (expr : RethinkDB, table : string, db : string) = expr.Db(db).Table table
-    
-    /// Create an equality join with another table
-    [<CustomOperation "eqJoin">]
-    member _.EqJoin (expr : ReqlExpr, field : string, otherTable : string) =
-        expr.EqJoin (field, RethinkDB.R.Table otherTable)
-    
+    /// Create an index for a table, using a function to calculate the index
+    [<CustomOperation "indexCreate">]
+    member this.IndexCreate (tbl : Table, index : string, f : ReqlExpr -> obj, opts : IndexCreateOptArg list) =
+        this.IndexCreate (tbl, index, f) |> IndexCreateOptArg.apply opts
+
     // data retrieval / manipulation
     
     /// Get a document from a table by its ID
     [<CustomOperation "get">]
     member _.Get (tbl : Table, key : obj) = tbl.Get key
     
+    /// Get all documents matching the given primary key value
+    [<CustomOperation "getAll">]
+    member _.GetAll (tbl : Table, keys : obj list) =
+        tbl.GetAll (Array.ofList keys)
+    
     /// Get all documents matching the given index value
     [<CustomOperation "getAll">]
-    member _.GetAll (tbl : Table, keys : obj list, index : string) =
-        tbl.GetAll(Array.ofList keys).OptArg ("index", index)
+    member this.GetAll (tbl : Table, keys : obj list, index : string) =
+        this.GetAll(tbl, keys).OptArg ("index", index)
     
     /// Skip a certain number of results
     [<CustomOperation "skip">]
@@ -120,19 +123,58 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "filter">]
     member _.Filter (expr : ReqlExpr, field : string, value : obj) = expr.Filter (fieldsToMap [ field, value ])
     
+    /// Filter a query by a single field value, including an optional argument
+    [<CustomOperation "filter">]
+    member this.Filter (expr : ReqlExpr, field : string, value : obj, opt : FilterOptArg) =
+        this.Filter (expr, field, value) |> FilterOptArg.apply opt
+    
     /// Filter a query by multiple field values
     [<CustomOperation "filter">]
     member _.Filter (expr : ReqlExpr, filter : (string * obj) list) = expr.Filter (fieldsToMap filter)
+    
+    /// Filter a query by multiple field values, including an optional argument
+    [<CustomOperation "filter">]
+    member this.Filter (expr : ReqlExpr, filter : (string * obj) list, opt : FilterOptArg) =
+        this.Filter (expr, filter) |> FilterOptArg.apply opt
     
     /// Filter a query by a function
     [<CustomOperation "filter">]
     member _.Filter (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.Filter (ReqlFunction1 f)
     
+    /// Filter a query by a function, including an optional argument
+    [<CustomOperation "filter">]
+    member this.Filter (expr : ReqlExpr, f : ReqlExpr -> obj, opt : FilterOptArg) =
+        this.Filter (expr, f) |> FilterOptArg.apply opt
+    
     /// Filter a query by multiple functions (has the effect of ANDing them)
     [<CustomOperation "filter">]
-    member _.Filter (expr : ReqlExpr, fs : (ReqlExpr -> obj) list) =
-        fs |> List.fold (fun (e : ReqlExpr) f -> e.Filter (ReqlFunction1 f)) expr
+    member _.Filter (expr : ReqlExpr, fs : (ReqlExpr -> obj) list) : Filter =
+        (fs |> List.fold (fun (e : ReqlExpr) f -> e.Filter (ReqlFunction1 f)) expr) :?> Filter
     
+    /// Filter a query by multiple functions (has the effect of ANDing them), including an optional argument
+    [<CustomOperation "filter">]
+    member this.Filter (expr : ReqlExpr, fs : (ReqlExpr -> obj) list, opt : FilterOptArg) =
+        this.Filter (expr, fs) |> FilterOptArg.apply opt
+    
+    /// Filter a query using a JavaScript expression
+    [<CustomOperation "filter">]
+    member _.Filter (expr : ReqlExpr, js : string) = expr.Filter (Javascript js)
+    
+    /// Filter a query using a JavaScript expression, including an optional argument
+    [<CustomOperation "filter">]
+    member this.Filter (expr : ReqlExpr, js : string, opt : FilterOptArg) =
+        this.Filter (expr, js) |> FilterOptArg.apply opt
+    
+    /// Filter a query by a range of values
+    [<CustomOperation "between">]
+    member _.Between (expr : ReqlExpr, lower : obj, upper : obj) =
+        expr.Between (lower, upper)
+    
+    /// Filter a query by a range of values, using optional arguments
+    [<CustomOperation "between">]
+    member this.Between (expr : ReqlExpr, lower : obj, upper : obj, opts : BetweenOptArg list) =
+        this.Between (expr, lower, upper) |> BetweenOptArg.apply opts
+        
     /// Map fields for the current query
     [<CustomOperation "map">]
     member _.Map (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.Map (ReqlFunction1 f)
@@ -169,17 +211,37 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "insert">]
     member _.Insert (tbl : Table, doc : obj) = tbl.Insert doc
     
+    /// Insert a document into the given table, using optional arguments
+    [<CustomOperation "insert">]
+    member this.Insert (tbl : Table, doc : obj, opts : InsertOptArg list) =
+        this.Insert (tbl, doc) |> InsertOptArg.apply opts
+    
     /// Update specific fields in a document
     [<CustomOperation "update">]
     member _.Update (expr : ReqlExpr, fields : (string * obj) list) = expr.Update (fieldsToMap fields)
+    
+    /// Update specific fields in a document, using optional arguments
+    [<CustomOperation "update">]
+    member this.Update (expr : ReqlExpr, fields : (string * obj) list, args : UpdateOptArg list) =
+        this.Update (expr, fields) |> UpdateOptArg.apply args
     
     /// Replace the current query with the specified document
     [<CustomOperation "replace">]
     member _.Replace (expr : ReqlExpr, doc : obj) = expr.Replace doc
     
+    /// Replace the current query with the specified document, using optional arguments
+    [<CustomOperation "replace">]
+    member this.Replace (expr : ReqlExpr, doc : obj, args : ReplaceOptArg list) =
+        this.Replace (expr, doc) |> ReplaceOptArg.apply args
+    
     /// Delete the document(s) identified by the current query
     [<CustomOperation "delete">]
     member _.Delete (expr : ReqlExpr) = expr.Delete ()
+
+    /// Delete the document(s) identified by the current query
+    [<CustomOperation "delete">]
+    member this.Delete (expr : ReqlExpr, opts : DeleteOptArg list) =
+        this.Delete expr |> DeleteOptArg.apply opts
 
     // executing queries
     
