@@ -273,6 +273,24 @@ type RethinkBuilder<'T> () =
     member this.Update (expr : ReqlExpr, fields : (string * obj) list, args : UpdateOptArg list) =
         this.Update (expr, fields) |> UpdateOptArg.apply args
     
+    /// Update specific fields in a document using a function
+    [<CustomOperation "update">]
+    member _.Update (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.Update (ReqlFunction1 f)
+    
+    /// Update specific fields in a document using a function, with optional arguments
+    [<CustomOperation "update">]
+    member this.Update (expr : ReqlExpr, f : ReqlExpr -> obj, args : UpdateOptArg list) =
+        this.Update (expr, f) |> UpdateOptArg.apply args
+    
+    /// Update specific fields in a document using a JavaScript function
+    [<CustomOperation "update">]
+    member _.Update (expr : ReqlExpr, js : string) = expr.Update (Javascript js)
+    
+    /// Update specific fields in a document using a JavaScript function, with optional arguments
+    [<CustomOperation "update">]
+    member this.Update (expr : ReqlExpr, js : string, args : UpdateOptArg list) =
+        this.Update (expr, js) |> UpdateOptArg.apply args
+    
     /// Replace the current query with the specified document
     [<CustomOperation "replace">]
     member _.Replace (expr : ReqlExpr, doc : obj) = expr.Replace doc
@@ -281,6 +299,24 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "replace">]
     member this.Replace (expr : ReqlExpr, doc : obj, args : ReplaceOptArg list) =
         this.Replace (expr, doc) |> ReplaceOptArg.apply args
+    
+    /// Replace the current query with document(s) created by a function
+    [<CustomOperation "replace">]
+    member _.Replace (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.Replace (ReqlFunction1 f)
+    
+    /// Replace the current query with document(s) created by a function, using optional arguments
+    [<CustomOperation "replace">]
+    member this.Replace (expr : ReqlExpr, f : ReqlExpr -> obj, args : ReplaceOptArg list) =
+        this.Replace (expr, f) |> ReplaceOptArg.apply args
+    
+    /// Replace the current query with document(s) created by a JavaScript function
+    [<CustomOperation "replace">]
+    member _.Replace (expr : ReqlExpr, js : string) = expr.Replace (Javascript js)
+    
+    /// Replace the current query with document(s) created by a JavaScript function, using optional arguments
+    [<CustomOperation "replace">]
+    member this.Replace (expr : ReqlExpr, js : string, args : ReplaceOptArg list) =
+        this.Replace (expr, js) |> ReplaceOptArg.apply args
     
     /// Delete the document(s) identified by the current query
     [<CustomOperation "delete">]
