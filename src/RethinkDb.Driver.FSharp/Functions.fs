@@ -178,13 +178,29 @@ let indexDrop (indexName : string) (table : Table) =
 let indexList (table : Table) =
     table.IndexList ()
 
-/// Rename an index (overwrite will fail)
+/// Rename an index (will fail if new name already exists)
 let indexRename (oldName : string) (newName : string) (table : Table) =
     table.IndexRename (oldName, newName)
 
 /// Rename an index (overwrite will succeed)
 let indexRenameWithOverwrite (oldName : string) (newName : string) (table : Table) =
-    table.IndexRename(oldName, newName).OptArg ("overwrite", true)
+    indexRename oldName newName table |> IndexRenameOptArg.apply Overwrite
+
+/// Get the status of specific indexes for the given table
+let indexStatus (table : Table) (indexes : string list) =
+    table.IndexStatus (Array.ofList indexes)
+
+/// Get the status of all indexes for the given table
+let indexStatusAll (table : Table) =
+    table.IndexStatus ()
+
+/// Wait for specific indexes on the given table to become ready
+let indexWait (table : Table) (indexes : string list) =
+    table.IndexWait (Array.ofList indexes)
+
+/// Wait for all indexes on the given table to become ready
+let indexWaitAll (table : Table) =
+    table.IndexWait ()
 
 /// Create an inner join between two sequences, specifying the join condition with a function
 let innerJoinFunc<'T> (otherSeq : obj) (f : ReqlExpr -> ReqlExpr -> 'T) (expr : ReqlExpr) =

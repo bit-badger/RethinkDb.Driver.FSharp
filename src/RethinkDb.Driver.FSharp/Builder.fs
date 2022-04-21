@@ -36,7 +36,8 @@ type RethinkBuilder<'T> () =
     
     /// Specify a database for further commands
     [<CustomOperation "withDb">]
-    member _.Db (r : RethinkDB, db : string) = match db with "" -> r.Db () | _ -> r.Db db
+    member _.Db (r : RethinkDB, db : string) =
+        match db with "" -> invalidArg db "db name cannot be blank" | _ -> r.Db db
     
     /// Identify a table (of form "dbName.tableName"; if no db name, uses default database)
     [<CustomOperation "withTable">]
@@ -60,13 +61,18 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "dbCreate">]
     member _.DbCreate (r : RethinkDB, db : string) = r.DbCreate db
     
+    /// Drop a database
+    [<CustomOperation "dbDrop">]
+    member _.DbDrop (r : RethinkDB, db : string) = r.DbDrop db
+    
     /// List all tables for the default database
     [<CustomOperation "tableList">]
     member _.TableList (r : RethinkDB) = r.TableList ()
     
     /// List all tables for the specified database
     [<CustomOperation "tableList">]
-    member this.TableList (r : RethinkDB, db : string) = this.Db(r, db).TableList ()
+    member this.TableList (r : RethinkDB, db : string) =
+        match db with "" -> this.TableList r | _ -> this.Db(r, db).TableList ()
     
     /// Create a table (of form "dbName.tableName"; if no db name, uses default database)
     [<CustomOperation "tableCreate">]
@@ -74,6 +80,13 @@ type RethinkBuilder<'T> () =
         match dbAndTable table with
         | Some db, tbl -> this.Db(r, db).TableCreate tbl
         | None, _ -> r.TableCreate table
+    
+    /// Drop a table (of form "dbName.tableName"; if no db name, uses default database)
+    [<CustomOperation "tableDrop">]
+    member this.TableDrop (r : RethinkDB, table : string) =
+        match dbAndTable table with
+        | Some db, tbl -> this.Db(r, db).TableDrop tbl
+        | None, _ -> r.TableDrop table
     
     /// List all indexes for a table
     [<CustomOperation "indexList">]
@@ -97,6 +110,35 @@ type RethinkBuilder<'T> () =
     member this.IndexCreate (tbl : Table, index : string, f : ReqlExpr -> obj, opts : IndexCreateOptArg list) =
         this.IndexCreate (tbl, index, f) |> IndexCreateOptArg.apply opts
 
+    /// Drop an index for a table
+    [<CustomOperation "indexDrop">]
+    member _.IndexDrop (tbl : Table, index : string) = tbl.IndexDrop index
+    
+    /// Rename an index on a table
+    [<CustomOperation "indexRename">]
+    member _.IndexRename (tbl : Table, oldName : string, newName : string) = tbl.IndexRename (oldName, newName)
+    
+    /// Rename an index on a table, specifying an overwrite option
+    [<CustomOperation "indexRename">]
+    member this.IndexRename (tbl : Table, oldName : string, newName : string, arg : IndexRenameOptArg) =
+        this.IndexRename(tbl, oldName, newName) |> IndexRenameOptArg.apply arg
+    
+    /// Get the status of all indexes on a table
+    [<CustomOperation "indexStatus">]
+    member _.IndexStatus (tbl : Table) = tbl.IndexStatus ()
+    
+    /// Get the status of specific indexes on a table
+    [<CustomOperation "indexStatus">]
+    member _.IndexStatus (tbl : Table, indexes : string list) = tbl.IndexStatus (Array.ofList indexes)
+    
+    /// Wait for all indexes on a table to become ready
+    [<CustomOperation "indexWait">]
+    member _.IndexWait (tbl : Table) = tbl.IndexWait ()
+    
+    /// Wait for specific indexes on a table to become ready
+    [<CustomOperation "indexWait">]
+    member _.IndexWait (tbl : Table, indexes : string list) = tbl.IndexWait (Array.ofList indexes)
+    
     // data retrieval / manipulation
     
     /// Get a document from a table by its ID
@@ -248,6 +290,10 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "delete">]
     member this.Delete (expr : ReqlExpr, opts : DeleteOptArg list) =
         this.Delete expr |> DeleteOptArg.apply opts
+
+    /// Wait for updates to a table to be synchronized to disk
+    [<CustomOperation "sync">]
+    member _.Sync (tbl : Table) = tbl.Sync ()
 
     // executing queries
     

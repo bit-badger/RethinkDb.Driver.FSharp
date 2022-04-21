@@ -149,6 +149,20 @@ type Conflict =
             | Resolve f -> ReqlFunction3 f :> obj
         "conflict", value
 
+
+/// Optional arguments for the `indexRename` statement
+type IndexRenameOptArg =
+    | FailIfExists
+    | Overwrite
+
+/// Function to support `indexRename` optional argument
+module IndexRenameOptArg =
+    
+    /// Apply an optional argument to an indexRename statement
+    let apply opt (ir : IndexRename) =
+        ir.OptArg("overwrite", match opt with FailIfExists -> false | Overwrite -> true)
+
+    
 /// Optional arguments for the `insert` statement
 type InsertOptArg =
     /// The durability of the command
