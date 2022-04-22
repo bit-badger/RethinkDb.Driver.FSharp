@@ -13,6 +13,7 @@ module private Helpers =
     /// Create a Javascript object from a string (used mostly for type inference)
     let toJS (js : string) = Javascript js
 
+// ~~ EXECUTION ~~
 
 /// Get a cursor with the results of an expression
 let asyncCursor<'T> conn (expr : ReqlExpr) =
@@ -132,6 +133,8 @@ let syncResult<'T> conn expr =
 let syncResultWithOptArgs<'T> args conn expr =
     asyncResultWithOptArgs<'T> args conn expr |> Async.RunSynchronously
 
+// ~~ QUERY DEFINITION ~~
+
 /// Get documents between a lower bound and an upper bound based on a primary key
 let between (lowerKey : obj) (upperKey : obj) (expr : ReqlExpr) =
     expr.Between (lowerKey, upperKey)
@@ -217,15 +220,15 @@ let filterWithOptArgs (filterSpec : obj) arg expr =
     filter filterSpec expr |> FilterOptArg.apply arg
 
 /// Filter documents using a function
-let filterFunc (f : ReqlExpr -> bool) (expr : ReqlExpr) =
-    expr.Filter (ReqlFunction1 (fun row -> f row :> obj))
+let filterFunc f (expr : ReqlExpr) =
+    expr.Filter (ReqlFunction1 f)
 
 /// Filter documents using a function, providing optional arguments
 let filterFuncWithOptArgs f arg expr =
     filterFunc f expr |> FilterOptArg.apply arg
 
 /// Filter documents using multiple functions (has the effect of ANDing them)
-let filterFuncAll (fs : (ReqlExpr -> bool) list) (expr : ReqlExpr) =
+let filterFuncAll fs expr =
     (fs |> List.fold (fun (e : ReqlExpr) f -> filterFunc f e) expr) :?> Filter
 
 /// Filter documents using multiple functions (has the effect of ANDing them), providing optional arguments
@@ -261,11 +264,11 @@ let indexCreateWithOptArgs (indexName : string) args (table : Table) =
     indexCreate indexName table |> IndexCreateOptArg.apply args
 
 /// Create an index on the given table using a function
-let indexCreateFunc<'T> (indexName : string) (f : ReqlExpr -> 'T) (table : Table) =
-    table.IndexCreate (indexName, ReqlFunction1 (fun row -> f row :> obj))
+let indexCreateFunc (indexName : string) f (table : Table) =
+    table.IndexCreate (indexName, ReqlFunction1 f)
 
 /// Create an index on the given table using a function, including optional arguments
-let indexCreateFuncWithOptArgs<'T> indexName (f : ReqlExpr -> 'T) args table =
+let indexCreateFuncWithOptArgs indexName f args table =
     indexCreateFunc indexName f table |> IndexCreateOptArg.apply args
 
 /// Create an index on the given table using JavaScript
@@ -317,19 +320,19 @@ let innerJoinJS (otherSeq : obj) js (expr : ReqlExpr) =
     expr.InnerJoin (otherSeq, toJS js)
 
 /// Insert a single document (use insertMany for multiple)
-let insert<'T> (doc : 'T) (table : Table) =
+let insert (doc : obj) (table : Table) =
     table.Insert doc
 
 /// Insert multiple documents
-let insertMany<'T> (docs : 'T seq) (table : Table) =
+let insertMany (docs : obj seq) (table : Table) =
     table.Insert (Array.ofSeq docs)
 
 /// Insert a single document, providing optional arguments (use insertManyWithOptArgs for multiple)
-let insertWithOptArgs<'T> (doc : 'T) args table =
+let insertWithOptArgs (doc : obj) args table =
     insert doc table |> InsertOptArg.apply args
 
 /// Insert multiple documents, providing optional arguments
-let insertManyWithOptArgs<'T> (docs : 'T seq) args table =
+let insertManyWithOptArgs (docs : obj seq) args table =
     insertMany docs table |> InsertOptArg.apply args
 
 /// Test whether a sequence is empty
@@ -409,19 +412,19 @@ let pluck (fields : string seq) (expr : ReqlExpr) =
     expr.Pluck (Array.ofSeq fields)
 
 /// Replace documents
-let replace<'T> (replaceSpec : 'T) (expr : ReqlExpr) =
+let replace (replaceSpec : obj) (expr : ReqlExpr) =
     expr.Replace replaceSpec
 
 /// Replace documents, providing optional arguments
-let replaceWithOptArgs<'T> (replaceSpec : 'T) args expr =
+let replaceWithOptArgs (replaceSpec : obj) args expr =
     replace replaceSpec expr |> ReplaceOptArg.apply args
 
 /// Replace documents using a function
-let replaceFunc<'T> (f : ReqlExpr -> 'T) (expr : ReqlExpr) =
-    expr.Replace (ReqlFunction1 (fun row -> f row :> obj))
+let replaceFunc f (expr : ReqlExpr) =
+    expr.Replace (ReqlFunction1 f)
 
 /// Replace documents using a function, providing optional arguments
-let replaceFuncWithOptArgs<'T> (f : ReqlExpr -> 'T) args expr =
+let replaceFuncWithOptArgs f args expr =
     replaceFunc f expr |> ReplaceOptArg.apply args
 
 /// Replace documents using JavaScript
@@ -473,19 +476,19 @@ let tableListFromDefault () =
     r.TableList ()
 
 /// Update documents
-let update<'T> (updateSpec : 'T) (expr : ReqlExpr) =
+let update (updateSpec : obj) (expr : ReqlExpr) =
     expr.Update updateSpec
 
 /// Update documents, providing optional arguments
-let updateWithOptArgs<'T> (updateSpec : 'T) args expr =
+let updateWithOptArgs (updateSpec : obj) args expr =
     update updateSpec expr |> UpdateOptArg.apply args
 
 /// Update documents using a function
-let updateFunc<'T> (f : ReqlExpr -> 'T) (expr : ReqlExpr) =
-    expr.Update (ReqlFunction1 (fun row -> f row :> obj))
+let updateFunc f (expr : ReqlExpr) =
+    expr.Update (ReqlFunction1 f)
 
 /// Update documents using a function, providing optional arguments
-let updateFuncWithOptArgs<'T> (f : ReqlExpr -> 'T) args expr =
+let updateFuncWithOptArgs f args expr =
     updateFunc f expr |> UpdateOptArg.apply args
 
 /// Update documents using JavaScript
@@ -503,7 +506,6 @@ let without (columns : string seq) (expr : ReqlExpr) =
 /// Merge the right-hand fields into the left-hand document of a sequence
 let zip (expr : ReqlExpr) =
     expr.Zip ()
-
 
 // ~~ RETRY ~~
 

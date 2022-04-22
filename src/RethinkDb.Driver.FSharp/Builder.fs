@@ -104,11 +104,11 @@ type RethinkBuilder<'T> () =
     
     /// Create an index for a table, using a function to calculate the index
     [<CustomOperation "indexCreate">]
-    member _.IndexCreate (tbl, index, f) = indexCreateFunc<'T> index f tbl
+    member _.IndexCreate (tbl, index, f) = indexCreateFunc index f tbl
     
     /// Create an index for a table, using a function to calculate the index
     [<CustomOperation "indexCreate">]
-    member _.IndexCreate (tbl, index, f, opts) = indexCreateFuncWithOptArgs<'T> index f opts tbl
+    member _.IndexCreate (tbl, index, f, opts) = indexCreateFuncWithOptArgs index f opts tbl
 
     /// Create an index for a table, using a JavaScript function to calculate the index
     [<CustomOperation "indexCreate">]
@@ -294,19 +294,19 @@ type RethinkBuilder<'T> () =
 
     /// Insert a document into the given table
     [<CustomOperation "insert">]
-    member _.Insert (tbl, doc) = insert<'T> doc tbl
+    member _.Insert (tbl, doc : obj) = insert doc tbl
     
     /// Insert multiple documents into the given table
     [<CustomOperation "insert">]
-    member _.Insert (tbl, doc) = insertMany<'T> (Seq.ofList doc) tbl
+    member _.Insert (tbl, doc) = insertMany (Seq.ofList doc) tbl
     
     /// Insert a document into the given table, using optional arguments
     [<CustomOperation "insert">]
-    member _.Insert (tbl, docs, opts) = insertWithOptArgs<'T> docs opts tbl
+    member _.Insert (tbl, docs : obj, opts) = insertWithOptArgs docs opts tbl
     
     /// Insert multiple documents into the given table, using optional arguments
     [<CustomOperation "insert">]
-    member _.Insert (tbl, docs, opts) = insertManyWithOptArgs<'T> (Seq.ofList docs) opts tbl
+    member _.Insert (tbl, docs, opts) = insertManyWithOptArgs (Seq.ofList docs) opts tbl
     
     /// Update specific fields in a document
     [<CustomOperation "update">]
@@ -318,11 +318,11 @@ type RethinkBuilder<'T> () =
     
     /// Update specific fields in a document using a function
     [<CustomOperation "update">]
-    member _.Update (expr, f) = updateFunc<'T> f expr
+    member _.Update (expr, f) = updateFunc f expr
     
     /// Update specific fields in a document using a function, with optional arguments
     [<CustomOperation "update">]
-    member _.Update (expr, f, args) = updateFuncWithOptArgs<'T> f args expr
+    member _.Update (expr, f, args) = updateFuncWithOptArgs f args expr
     
     /// Update specific fields in a document using a JavaScript function
     [<CustomOperation "update">]
@@ -334,19 +334,19 @@ type RethinkBuilder<'T> () =
     
     /// Replace the current query with the specified document
     [<CustomOperation "replace">]
-    member _.Replace (expr, doc) = replace<'T> doc expr
+    member _.Replace (expr, doc : obj) = replace doc expr
     
     /// Replace the current query with the specified document, using optional arguments
     [<CustomOperation "replace">]
-    member _.Replace (expr, doc, args) = replaceWithOptArgs<'T> doc args expr
+    member _.Replace (expr, doc : obj, args) = replaceWithOptArgs doc args expr
     
     /// Replace the current query with document(s) created by a function
     [<CustomOperation "replace">]
-    member _.Replace (expr, f) = replaceFunc<'T> f expr
+    member _.Replace (expr, f) = replaceFunc f expr
     
     /// Replace the current query with document(s) created by a function, using optional arguments
     [<CustomOperation "replace">]
-    member _.Replace (expr, f, args) = replaceFuncWithOptArgs<'T> f args expr
+    member _.Replace (expr, f, args) = replaceFuncWithOptArgs f args expr
     
     /// Replace the current query with document(s) created by a JavaScript function
     [<CustomOperation "replace">]
