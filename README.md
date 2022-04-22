@@ -13,6 +13,8 @@ The goal is to provide:
 - A composable pipeline for creating ReQL statements:
 
 ```fsharp
+open RethinkDb.Driver.FSharp.Functions
+
 /// string -> (IConnection -> Task<Post>)
 let fetchPost (postId : string) =
     fromDb "Blog"
@@ -25,6 +27,8 @@ let fetchPost (postId : string) =
 - An F# domain-specific language (DSL) using a `rethink` computation expression (CE):
 
 ```fsharp
+open RethinkDb.Driver.FSharp
+
 /// string -> (IConnection -> Task<Post>)
 let fetchPost (postId : string) =
     rethink<Post> {
@@ -59,18 +63,20 @@ The examples above both use the default retry logic.
 
 - Only rename functions/methods where required
 
-Within the CE, there are a few differing names, mostly notably at the start (selecting databases and tables); this is to allow for a more natural language flow. Its names may change in the 0.8.x series; it is the most alpha part of the project at this point.
+Within the CE, there are a few differing names, mostly notably at the start (selecting databases and tables); this is to allow for a more natural language flow. Its names may change in the 0.8.x series; it is the most alpha part of the project at this point. Also, while CEs now support overloading (thank you F# 6 developers!), they do not detect if the first value in the tupled arguments is different. This is most noticeable once `result*` or `write*` commands have been issued; these support `Task<'T>`, `Async<'T>`, and synchronous `'T` operations, but the follow-on commands will be different (e.x. `withRetryDefault` (tasks) vs. `withAsyncRetryDefault` vs. `withSyncRetryDefault`). There are also versions of these that support optional arguments (for all) and cancellation tokens (for task/async).
 
-The functions do have to change a bit, since they do not support overloading; an example for `filter` is below.
+The functions show this pattern throughout, as functions in a module do not support overloading; an example for `filter` is below.
 
 ```fsharp
 // Function names cannot be polymorphic the way object-oriented methods can, so filter's three overloads become
 filter (r.HashMap ("age", 30))
 // and
-filterFunc (fun row -> row.["age"].Eq(30))
+filterFunc (fun row -> row.G("age").Eq 30)
 // and
 filterJS "function (row) { return 30 == row['age'] }"
 ```
+
+Functions that support optional arguments end with `WithOptArgs`; those that support cancellation tokens end with `WithCancel`; and, those that support both end with `WithOptArgsAndCancel`.
 
 ## Licensing
 

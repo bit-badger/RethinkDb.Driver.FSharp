@@ -215,6 +215,90 @@ module ReplaceOptArg =
             r
 
 
+/// How RethinkDB should read the data
+type ReadMode =
+    /// Return values in memory from the primary replica (default)
+    | Single
+    /// Return values committed to a majority of replicas
+    | Majority
+    /// Return values in memory from an arbitrary replica
+    | Outdated
+    
+    /// The ReQL representation of the read mode
+    member this.reql = match this with Single -> "single" | Majority -> "majority" | Outdated -> "outdated"
+
+
+/// How the returned data should be formatted
+type ReturnFormat =
+    /// The native representation for the calling environment
+    | Native
+    /// The raw representation
+    | Raw
+    
+    /// The ReQL representation of the format
+    member this.reql = match this with Native -> "native" | Raw -> "raw"
+
+
+/// Optional arguments for the `run` command
+type RunOptArg =
+    /// How data should be read
+    | ReadMode of ReadMode
+    /// The time format (raw is JSON)
+    | TimeFormat of ReturnFormat
+    /// Whether to profile the query
+    | Profile of bool
+    /// The durability of the command
+    | Durability of Durability
+    /// The format of grouped data and streams
+    | GroupFormat of ReturnFormat
+    /// The database against which this run should be executed
+    | Db of string
+    /// The maximum size of a returned array (RethinkDB default is 100,000)
+    | ArrayLimit of int
+    /// The format of binary data
+    | BinaryFormat of ReturnFormat
+    /// Minimum number of rows to wait before batching results (RethinkDB default is 8)
+    | MinBatchRows of int
+    /// Maximum number of rows to wait before batching results (RethinkDB default is no upper bound)
+    | MaxBatchRows of int
+    /// Maximum number of bytes to wait before batching results (RethinkDB default is 1MB)
+    | MaxBatchBytes of int
+    /// Maximum number of seconds to wait before batching results (RethinkDB default is 0.5)
+    | MaxBatchSeconds of float
+    /// Factor to reduce other values for the first batch
+    | FirstBatchScaleDownFactor of int
+    
+    /// The ReQL representation of the optional argument
+    member this.reql =
+        let pair =
+            match this with
+            | ReadMode                  mde -> "read_mode",   mde.reql :> obj
+            | TimeFormat                fmt -> "time_format", fmt.reql
+            | Profile                   prf -> "profile",     prf
+            | Durability                dur -> match dur.reql with k, v -> k, v
+            | GroupFormat               fmt -> "group_format",                 fmt.reql
+            | Db                        db  -> "db",                           db
+            | ArrayLimit                lim -> "array_limit",                  lim
+            | BinaryFormat              fmt -> "binary_format",                fmt.reql
+            | MinBatchRows              min -> "min_batch_rows",               min
+            | MaxBatchRows              max -> "max_batch_rows",               max
+            | MaxBatchBytes             max -> "max_batch_bytes",              max
+            | MaxBatchSeconds           max -> "max_batch_seconds",            max
+            | FirstBatchScaleDownFactor fac -> "first_batch_scaledown_factor", fac
+        fst pair, RethinkDB.R.Expr (snd pair)
+
+/// Function to support `run` optional arguments
+module RunOptArg =
+    
+    open RethinkDb.Driver.Model
+    
+    /// Create optional argument for a run command
+    let create (opts : RunOptArg list) =
+        let args = OptArgs ()
+        opts |> List.iter (fun arg -> args.Add arg.reql)
+        args
+
+
 /// Optional arguments for the `update` statement
 type UpdateOptArg =
     /// The durability of the command

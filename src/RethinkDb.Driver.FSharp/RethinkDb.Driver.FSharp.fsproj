@@ -8,18 +8,18 @@
     <PackageProjectUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp</PackageProjectUrl>
     <!-- PackageIconUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp/raw/master/icon/icon.png</PackageIconUrl -->
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>Alpha; use at your own risk</PackageReleaseNotes>
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
     <VersionPrefix>0.8.0</VersionPrefix>
-    <VersionSuffix>alpha-0005</VersionSuffix>
+    <VersionSuffix>alpha-0006</VersionSuffix>
+    <PackageReleaseNotes>Alpha; use at your own risk</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="Retry.fs" />
     <Compile Include="OptArgs.fs" />
-    <Compile Include="Builder.fs" />
     <Compile Include="Functions.fs" />
+    <Compile Include="Builder.fs" />
     <Compile Include="Config.fs" />
   </ItemGroup>
 

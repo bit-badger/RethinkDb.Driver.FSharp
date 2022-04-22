@@ -1,18 +1,17 @@
 ﻿[<AutoOpen>]
 module RethinkDb.Driver.FSharp.RethinkBuilder
 
+open System.Threading
+open System.Threading.Tasks
 open RethinkDb.Driver
 open RethinkDb.Driver.Ast
 open RethinkDb.Driver.FSharp
+open RethinkDb.Driver.FSharp.Functions
 open RethinkDb.Driver.Net
-open System.Threading.Tasks
 
 /// Computation Expression builder for RethinkDB queries
 type RethinkBuilder<'T> () =
     
-    /// Await a Task (avoids using the task CE when we may raise exceptions)
-    let await = Async.AwaitTask >> Async.RunSynchronously
-
     /// Create a RethinkDB hash map of the given field/value pairs
     let fieldsToMap (fields : (string * obj) list) =
         fields
@@ -26,6 +25,9 @@ type RethinkBuilder<'T> () =
             Some parts[0], parts[1]
         | false -> None, table
     
+    /// Return None if the item is null, Some if it is not
+    let noneIfNull (it : 'T) = match (box >> isNull) it with true -> None | false -> Some it
+    
     member _.Bind (expr : ReqlExpr, f : ReqlExpr -> ReqlExpr) = f expr
   
     member this.For (expr, f) = this.Bind (expr, f)
@@ -36,15 +38,15 @@ type RethinkBuilder<'T> () =
     
     /// Specify a database for further commands
     [<CustomOperation "withDb">]
-    member _.Db (r : RethinkDB, db : string) =
-        match db with "" -> invalidArg db "db name cannot be blank" | _ -> r.Db db
+    member _.Db (_ : RethinkDB, dbName : string) =
+        match dbName with "" -> invalidArg dbName "db name cannot be blank" | _ -> db dbName
     
     /// Identify a table (of form "dbName.tableName"; if no db name, uses default database)
     [<CustomOperation "withTable">]
-    member this.Table (r : RethinkDB, table : string) =
-        match dbAndTable table with
-        | Some db, tbl -> this.Db(r, db).Table tbl
-        | None, _ -> r.Table table
+    member this.Table (r, tableName) =
+        match dbAndTable tableName with
+        | Some dbName, tblName -> this.Db (r, dbName) |> table tblName
+        | None, _ -> fromTable tableName
     
     /// Create an equality join with another table
     [<CustomOperation "eqJoin">]
@@ -55,338 +57,717 @@ type RethinkBuilder<'T> () =
     
     /// List all databases
     [<CustomOperation "dbList">]
-    member _.DbList (r : RethinkDB) = r.DbList ()
+    member _.DbList (_ : RethinkDB) = dbList ()
     
     /// Create a database
     [<CustomOperation "dbCreate">]
-    member _.DbCreate (r : RethinkDB, db : string) = r.DbCreate db
+    member _.DbCreate (_ : RethinkDB, dbName) = dbCreate dbName
     
     /// Drop a database
     [<CustomOperation "dbDrop">]
-    member _.DbDrop (r : RethinkDB, db : string) = r.DbDrop db
+    member _.DbDrop (_ : RethinkDB, dbName) = dbDrop dbName
     
     /// List all tables for the default database
     [<CustomOperation "tableList">]
-    member _.TableList (r : RethinkDB) = r.TableList ()
+    member _.TableList (_ : RethinkDB) = tableListFromDefault ()
     
     /// List all tables for the specified database
     [<CustomOperation "tableList">]
-    member this.TableList (r : RethinkDB, db : string) =
-        match db with "" -> this.TableList r | _ -> this.Db(r, db).TableList ()
+    member this.TableList (r, dbName) =
+        match dbName with "" -> tableListFromDefault () | _ -> this.Db (r, dbName) |> tableList
     
     /// Create a table (of form "dbName.tableName"; if no db name, uses default database)
     [<CustomOperation "tableCreate">]
-    member this.TableCreate (r : RethinkDB, table : string) =
-        match dbAndTable table with
-        | Some db, tbl -> this.Db(r, db).TableCreate tbl
-        | None, _ -> r.TableCreate table
+    member this.TableCreate (r, tableName) =
+        match dbAndTable tableName with
+        | Some dbName, tblName -> this.Db (r, dbName) |> tableCreate tblName
+        | None, _ -> tableCreateInDefault tableName
     
     /// Drop a table (of form "dbName.tableName"; if no db name, uses default database)
     [<CustomOperation "tableDrop">]
-    member this.TableDrop (r : RethinkDB, table : string) =
-        match dbAndTable table with
-        | Some db, tbl -> this.Db(r, db).TableDrop tbl
-        | None, _ -> r.TableDrop table
+    member this.TableDrop (r, tableName) =
+        match dbAndTable tableName with
+        | Some dbName, tblName -> this.Db (r, dbName) |> tableDrop tblName
+        | None, _ -> tableDropFromDefault tableName
     
     /// List all indexes for a table
     [<CustomOperation "indexList">]
-    member _.IndexList (tbl : Table) = tbl.IndexList ()
+    member _.IndexList tbl = indexList tbl
     
     /// Create an index for a table
     [<CustomOperation "indexCreate">]
-    member _.IndexCreate (tbl : Table, index : string) = tbl.IndexCreate index
+    member _.IndexCreate (tbl, index) = indexCreate index tbl
     
     /// Create an index for a table, specifying an optional argument
     [<CustomOperation "indexCreate">]
-    member this.IndexCreate (tbl : Table, index : string, opts : IndexCreateOptArg list) =
-        this.IndexCreate (tbl, index) |> IndexCreateOptArg.apply opts
+    member _.IndexCreate (tbl, index, opts) = indexCreateWithOptArgs index opts tbl
     
     /// Create an index for a table, using a function to calculate the index
     [<CustomOperation "indexCreate">]
-    member _.IndexCreate (tbl : Table, index : string, f : ReqlExpr -> obj) = tbl.IndexCreate (index, ReqlFunction1 f)
+    member _.IndexCreate (tbl, index, f) = indexCreateFunc<'T> index f tbl
     
     /// Create an index for a table, using a function to calculate the index
     [<CustomOperation "indexCreate">]
-    member this.IndexCreate (tbl : Table, index : string, f : ReqlExpr -> obj, opts : IndexCreateOptArg list) =
-        this.IndexCreate (tbl, index, f) |> IndexCreateOptArg.apply opts
+    member _.IndexCreate (tbl, index, f, opts) = indexCreateFuncWithOptArgs<'T> index f opts tbl
+
+    /// Create an index for a table, using a JavaScript function to calculate the index
+    [<CustomOperation "indexCreate">]
+    member _.IndexCreate (tbl, index, js) = indexCreateJS index js tbl
+    
+    /// Create an index for a table, using a JavaScript function to calculate the index
+    [<CustomOperation "indexCreate">]
+    member _.IndexCreate (tbl, index, js, opts) = indexCreateJSWithOptArgs index js opts tbl
 
     /// Drop an index for a table
     [<CustomOperation "indexDrop">]
-    member _.IndexDrop (tbl : Table, index : string) = tbl.IndexDrop index
+    member _.IndexDrop (tbl, index) = indexDrop index tbl
     
     /// Rename an index on a table
     [<CustomOperation "indexRename">]
-    member _.IndexRename (tbl : Table, oldName : string, newName : string) = tbl.IndexRename (oldName, newName)
+    member _.IndexRename (tbl, oldName, newName) = indexRename oldName newName tbl
     
     /// Rename an index on a table, specifying an overwrite option
     [<CustomOperation "indexRename">]
-    member this.IndexRename (tbl : Table, oldName : string, newName : string, arg : IndexRenameOptArg) =
-        this.IndexRename(tbl, oldName, newName) |> IndexRenameOptArg.apply arg
+    member _.IndexRename (tbl, oldName, newName, opt) = indexRenameWithOptArg oldName newName opt tbl
     
     /// Get the status of all indexes on a table
     [<CustomOperation "indexStatus">]
-    member _.IndexStatus (tbl : Table) = tbl.IndexStatus ()
+    member _.IndexStatus tbl = indexStatusAll tbl
     
     /// Get the status of specific indexes on a table
     [<CustomOperation "indexStatus">]
-    member _.IndexStatus (tbl : Table, indexes : string list) = tbl.IndexStatus (Array.ofList indexes)
+    member _.IndexStatus (tbl, indexes) = indexStatus indexes tbl
     
     /// Wait for all indexes on a table to become ready
     [<CustomOperation "indexWait">]
-    member _.IndexWait (tbl : Table) = tbl.IndexWait ()
+    member _.IndexWait tbl = indexWaitAll tbl
     
     /// Wait for specific indexes on a table to become ready
     [<CustomOperation "indexWait">]
-    member _.IndexWait (tbl : Table, indexes : string list) = tbl.IndexWait (Array.ofList indexes)
+    member _.IndexWait (tbl, indexes) = indexWait indexes tbl
     
     // data retrieval / manipulation
     
     /// Get a document from a table by its ID
     [<CustomOperation "get">]
-    member _.Get (tbl : Table, key : obj) = tbl.Get key
+    member _.Get (tbl, key : obj) = get key tbl
     
     /// Get all documents matching the given primary key value
     [<CustomOperation "getAll">]
-    member _.GetAll (tbl : Table, keys : obj list) =
-        tbl.GetAll (Array.ofList keys)
+    member _.GetAll (tbl, keys) = getAll (Seq.ofList keys) tbl
     
     /// Get all documents matching the given index value
     [<CustomOperation "getAll">]
-    member this.GetAll (tbl : Table, keys : obj list, index : string) =
-        this.GetAll(tbl, keys).OptArg ("index", index)
+    member _.GetAll (tbl, keys, index) = getAllWithIndex (Seq.ofList keys) index tbl
     
     /// Skip a certain number of results
     [<CustomOperation "skip">]
-    member _.Skip (expr : ReqlExpr, toSkip : int) = expr.Skip toSkip
+    member _.Skip (expr, toSkip) = skip toSkip expr
 
     /// Limit the results of this query
     [<CustomOperation "limit">]
-    member _.Limit (expr : ReqlExpr, limit : int) = expr.Limit limit
+    member _.Limit (expr, toLimit) = limit toLimit expr
 
     /// Count documents for the current query
     [<CustomOperation "count">]
-    member _.Count (expr : ReqlExpr) = expr.Count ()
+    member _.Count expr = count expr
+    
+    /// Count documents for the current query
+    [<CustomOperation "count">]
+    member _.Count (expr, f) = countFunc f expr
+    
+    /// Count documents for the current query
+    [<CustomOperation "count">]
+    member _.Count (expr, js) = countJS js expr
     
     /// Filter a query by a single field value
     [<CustomOperation "filter">]
-    member _.Filter (expr : ReqlExpr, field : string, value : obj) = expr.Filter (fieldsToMap [ field, value ])
+    member _.Filter (expr, field, value) = filter (fieldsToMap [ field, value ]) expr
     
     /// Filter a query by a single field value, including an optional argument
     [<CustomOperation "filter">]
-    member this.Filter (expr : ReqlExpr, field : string, value : obj, opt : FilterOptArg) =
-        this.Filter (expr, field, value) |> FilterOptArg.apply opt
+    member _.Filter (expr, field, value, opt) = filterWithOptArgs (fieldsToMap [ field, value ]) opt expr
     
     /// Filter a query by multiple field values
     [<CustomOperation "filter">]
-    member _.Filter (expr : ReqlExpr, filter : (string * obj) list) = expr.Filter (fieldsToMap filter)
+    member _.Filter (expr, filters) = filter (fieldsToMap filters) expr
     
     /// Filter a query by multiple field values, including an optional argument
     [<CustomOperation "filter">]
-    member this.Filter (expr : ReqlExpr, filter : (string * obj) list, opt : FilterOptArg) =
-        this.Filter (expr, filter) |> FilterOptArg.apply opt
+    member _.Filter (expr, filters, opt) = filterWithOptArgs (fieldsToMap filters) opt expr
     
     /// Filter a query by a function
     [<CustomOperation "filter">]
-    member _.Filter (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.Filter (ReqlFunction1 f)
+    member _.Filter (expr, f) = filterFunc f expr
     
     /// Filter a query by a function, including an optional argument
     [<CustomOperation "filter">]
-    member this.Filter (expr : ReqlExpr, f : ReqlExpr -> obj, opt : FilterOptArg) =
-        this.Filter (expr, f) |> FilterOptArg.apply opt
+    member _.Filter (expr, f, opt) = filterFuncWithOptArgs f opt expr
     
     /// Filter a query by multiple functions (has the effect of ANDing them)
     [<CustomOperation "filter">]
-    member _.Filter (expr : ReqlExpr, fs : (ReqlExpr -> obj) list) : Filter =
-        (fs |> List.fold (fun (e : ReqlExpr) f -> e.Filter (ReqlFunction1 f)) expr) :?> Filter
+    member _.Filter (expr, fs) = filterFuncAll fs expr
     
     /// Filter a query by multiple functions (has the effect of ANDing them), including an optional argument
     [<CustomOperation "filter">]
-    member this.Filter (expr : ReqlExpr, fs : (ReqlExpr -> obj) list, opt : FilterOptArg) =
-        this.Filter (expr, fs) |> FilterOptArg.apply opt
+    member _.Filter (expr, fs, opt) = filterFuncAllWithOptArgs fs opt expr
     
     /// Filter a query using a JavaScript expression
     [<CustomOperation "filter">]
-    member _.Filter (expr : ReqlExpr, js : string) = expr.Filter (Javascript js)
+    member _.Filter (expr, js) = filterJS js expr
     
     /// Filter a query using a JavaScript expression, including an optional argument
     [<CustomOperation "filter">]
-    member this.Filter (expr : ReqlExpr, js : string, opt : FilterOptArg) =
-        this.Filter (expr, js) |> FilterOptArg.apply opt
+    member _.Filter (expr, js, opt) = filterJSWithOptArgs js opt expr
     
     /// Filter a query by a range of values
     [<CustomOperation "between">]
-    member _.Between (expr : ReqlExpr, lower : obj, upper : obj) =
-        expr.Between (lower, upper)
+    member _.Between (expr, lower : obj, upper : obj) = between lower upper expr
     
     /// Filter a query by a range of values, using optional arguments
     [<CustomOperation "between">]
-    member this.Between (expr : ReqlExpr, lower : obj, upper : obj, opts : BetweenOptArg list) =
-        this.Between (expr, lower, upper) |> BetweenOptArg.apply opts
+    member _.Between (expr, lower : obj, upper : obj, opts) = betweenWithOptArgs lower upper opts expr
         
-    /// Map fields for the current query
+    /// Map fields for the current query using a function
     [<CustomOperation "map">]
-    member _.Map (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.Map (ReqlFunction1 f)
+    member _.Map (expr, f) = mapFunc f expr
+
+    /// Map fields for the current query using a JavaScript function
+    [<CustomOperation "map">]
+    member _.Map (expr, js) = mapJS js expr
 
     /// Exclude the given fields from the output
     [<CustomOperation "without">]
-    member _.Without (expr : ReqlExpr, fields : obj list) = expr.Without (Array.ofList fields)
+    member _.Without (expr, fields) = without (Seq.ofList fields) expr
     
     /// Combine a left and right selection into a single record
     [<CustomOperation "zip">]
-    member _.Zip (expr : ReqlExpr) = expr.Zip ()
+    member _.Zip expr = zip expr
     
     /// Merge a document into the current query
     [<CustomOperation "merge">]
-    member _.Merge (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.Merge (ReqlFunction1 f)
+    member _.Merge (expr, doc : obj) = merge doc expr
+    
+    /// Merge a document into the current query, constructed by a function
+    [<CustomOperation "merge">]
+    member _.Merge (expr, f) = mergeFunc f expr
+    
+    /// Merge a document into the current query, constructed by a JavaScript function
+    [<CustomOperation "merge">]
+    member _.Merge (expr, js) = mergeJS js expr
     
     /// Pluck (select only) specific fields from the query
     [<CustomOperation "pluck">]
-    member _.Pluck (expr : ReqlExpr, fields : string list) = expr.Pluck (Array.ofList fields)
+    member _.Pluck (expr, fields) = pluck (Seq.ofList fields) expr
     
-    /// Order the results by the given field value (ascending)
+    /// Order the results by the given field name (ascending)
     [<CustomOperation "orderBy">]
-    member _.OrderBy (expr : ReqlExpr, field : string) = expr.OrderBy field
+    member _.OrderBy (expr, field) = orderBy field expr
 
-    /// Order the results by the given function value
-    [<CustomOperation "orderBy">]
-    member _.OrderBy (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.OrderBy (ReqlFunction1 f)
-
-    /// Order the results by the given field value (descending)
+    /// Order the results by the given field name (descending)
     [<CustomOperation "orderByDescending">]
-    member _.OrderByDescending (expr : ReqlExpr, field : string) = expr.OrderBy (RethinkDB.R.Desc field)
+    member _.OrderByDescending (expr, field) = orderByDescending field expr
+
+    /// Order the results by the given index name (ascending)
+    [<CustomOperation "orderByIndex">]
+    member _.OrderByIndex (expr, index) = orderByIndex index expr
+
+    /// Order the results by the given index name (descending)
+    [<CustomOperation "orderByIndexDescending">]
+    member _.OrderByIndexDescending (expr, index) = orderByIndexDescending index expr
+
+    /// Order the results by the given function value (ascending)
+    [<CustomOperation "orderByFunc">]
+    member _.OrderByFunc (expr, f) = orderByFunc f expr
+
+    /// Order the results by the given function value (descending)
+    [<CustomOperation "orderByFuncDescending">]
+    member _.OrderByFuncDescending (expr, f) = orderByFuncDescending f expr
+
+    /// Order the results by the given JavaScript function value (ascending)
+    [<CustomOperation "orderByJS">]
+    member _.OrderByJS (expr, js) = orderByJS js expr
+
+    /// Order the results by the given JavaScript function value (descending)
+    [<CustomOperation "orderByJSDescending">]
+    member _.OrderByJSDescending (expr, js) = orderByJSDescending js expr
 
     /// Insert a document into the given table
     [<CustomOperation "insert">]
-    member _.Insert (tbl : Table, doc : obj) = tbl.Insert doc
+    member _.Insert (tbl, doc) = insert<'T> doc tbl
+    
+    /// Insert multiple documents into the given table
+    [<CustomOperation "insert">]
+    member _.Insert (tbl, doc) = insertMany<'T> (Seq.ofList doc) tbl
     
     /// Insert a document into the given table, using optional arguments
     [<CustomOperation "insert">]
-    member this.Insert (tbl : Table, doc : obj, opts : InsertOptArg list) =
-        this.Insert (tbl, doc) |> InsertOptArg.apply opts
+    member _.Insert (tbl, docs, opts) = insertWithOptArgs<'T> docs opts tbl
+    
+    /// Insert multiple documents into the given table, using optional arguments
+    [<CustomOperation "insert">]
+    member _.Insert (tbl, docs, opts) = insertManyWithOptArgs<'T> (Seq.ofList docs) opts tbl
     
     /// Update specific fields in a document
     [<CustomOperation "update">]
-    member _.Update (expr : ReqlExpr, fields : (string * obj) list) = expr.Update (fieldsToMap fields)
+    member _.Update (expr, fields) = update (fieldsToMap fields) expr
     
     /// Update specific fields in a document, using optional arguments
     [<CustomOperation "update">]
-    member this.Update (expr : ReqlExpr, fields : (string * obj) list, args : UpdateOptArg list) =
-        this.Update (expr, fields) |> UpdateOptArg.apply args
+    member _.Update (expr, fields, args) = updateWithOptArgs (fieldsToMap fields) args expr
     
     /// Update specific fields in a document using a function
     [<CustomOperation "update">]
-    member _.Update (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.Update (ReqlFunction1 f)
+    member _.Update (expr, f) = updateFunc<'T> f expr
     
     /// Update specific fields in a document using a function, with optional arguments
     [<CustomOperation "update">]
-    member this.Update (expr : ReqlExpr, f : ReqlExpr -> obj, args : UpdateOptArg list) =
-        this.Update (expr, f) |> UpdateOptArg.apply args
+    member _.Update (expr, f, args) = updateFuncWithOptArgs<'T> f args expr
     
     /// Update specific fields in a document using a JavaScript function
     [<CustomOperation "update">]
-    member _.Update (expr : ReqlExpr, js : string) = expr.Update (Javascript js)
+    member _.Update (expr, js) = updateJS js expr
     
     /// Update specific fields in a document using a JavaScript function, with optional arguments
     [<CustomOperation "update">]
-    member this.Update (expr : ReqlExpr, js : string, args : UpdateOptArg list) =
-        this.Update (expr, js) |> UpdateOptArg.apply args
+    member _.Update (expr, js, args) = updateJSWithOptArgs js args expr
     
     /// Replace the current query with the specified document
     [<CustomOperation "replace">]
-    member _.Replace (expr : ReqlExpr, doc : obj) = expr.Replace doc
+    member _.Replace (expr, doc) = replace<'T> doc expr
     
     /// Replace the current query with the specified document, using optional arguments
     [<CustomOperation "replace">]
-    member this.Replace (expr : ReqlExpr, doc : obj, args : ReplaceOptArg list) =
-        this.Replace (expr, doc) |> ReplaceOptArg.apply args
+    member _.Replace (expr, doc, args) = replaceWithOptArgs<'T> doc args expr
     
     /// Replace the current query with document(s) created by a function
     [<CustomOperation "replace">]
-    member _.Replace (expr : ReqlExpr, f : ReqlExpr -> obj) = expr.Replace (ReqlFunction1 f)
+    member _.Replace (expr, f) = replaceFunc<'T> f expr
     
     /// Replace the current query with document(s) created by a function, using optional arguments
     [<CustomOperation "replace">]
-    member this.Replace (expr : ReqlExpr, f : ReqlExpr -> obj, args : ReplaceOptArg list) =
-        this.Replace (expr, f) |> ReplaceOptArg.apply args
+    member _.Replace (expr, f, args) = replaceFuncWithOptArgs<'T> f args expr
     
     /// Replace the current query with document(s) created by a JavaScript function
     [<CustomOperation "replace">]
-    member _.Replace (expr : ReqlExpr, js : string) = expr.Replace (Javascript js)
+    member _.Replace (expr, js) = replaceJS js expr
     
     /// Replace the current query with document(s) created by a JavaScript function, using optional arguments
     [<CustomOperation "replace">]
-    member this.Replace (expr : ReqlExpr, js : string, args : ReplaceOptArg list) =
-        this.Replace (expr, js) |> ReplaceOptArg.apply args
+    member _.Replace (expr, js, args) = replaceJSWithOptArgs js args expr
     
     /// Delete the document(s) identified by the current query
     [<CustomOperation "delete">]
-    member _.Delete (expr : ReqlExpr) = expr.Delete ()
+    member _.Delete expr = delete expr
 
     /// Delete the document(s) identified by the current query
     [<CustomOperation "delete">]
-    member this.Delete (expr : ReqlExpr, opts : DeleteOptArg list) =
-        this.Delete expr |> DeleteOptArg.apply opts
+    member _.Delete (expr, opts) = deleteWithOptArgs opts expr
 
     /// Wait for updates to a table to be synchronized to disk
     [<CustomOperation "sync">]
-    member _.Sync (tbl : Table) = tbl.Sync ()
+    member _.Sync tbl = sync tbl
 
     // executing queries
     
-    /// Execute the query, returning the result of the type specified
+    /// Execute the query, returning the result of the type specified using the given cancellation token
     [<CustomOperation "result">]
-    member _.Result (expr : ReqlExpr) : IConnection -> Task<'T> = 
-        fun conn -> backgroundTask {
-            return! expr.RunResultAsync<'T> conn
-        }
+    member _.Result (expr, cancelToken) = fun conn -> backgroundTask {
+        return! runResultWithCancel<'T> cancelToken conn expr
+    }
+    
+    /// Execute the query, returning the result of the type specified using the given cancellation token
+    [<CustomOperation "result">]
+    member _.Result (expr, cancelToken, conn) = runResultWithCancel<'T> cancelToken conn expr
     
     /// Execute the query, returning the result of the type specified
     [<CustomOperation "result">]
-    member this.Result (expr, conn) =
-        this.Result expr conn
+    member _.Result expr = fun conn -> backgroundTask {
+        return! runResult<'T> conn expr
+    }
+    
+    /// Execute the query, returning the result of the type specified
+    [<CustomOperation "result">]
+    member _.Result (expr, conn) = runResult<'T> conn expr
+    
+    /// Execute the query, returning the result of the type specified, using optional arguments
+    [<CustomOperation "result">]
+    member _.Result (expr, args) = fun conn -> backgroundTask {
+        return! runResultWithOptArgs<'T> args conn expr 
+    }
+    
+    /// Execute the query, returning the result of the type specified
+    [<CustomOperation "result">]
+    member _.Result (expr, args, conn) = runResultWithOptArgs<'T> args conn expr
+    
+    /// Execute the query, returning the result of the type specified, using optional arguments and a cancellation token
+    [<CustomOperation "result">]
+    member _.Result (expr, args, cancelToken) = fun conn -> backgroundTask {
+        return! runResultWithOptArgsAndCancel<'T> args cancelToken conn expr 
+    }
+    
+    /// Execute the query, returning the result of the type specified, using optional arguments and a cancellation token
+    [<CustomOperation "result">]
+    member _.Result (expr, args, cancelToken, conn) =
+        runResultWithOptArgsAndCancel<'T> args cancelToken conn expr 
     
     /// Execute the query, returning the result of the type specified, or None if no result is found
     [<CustomOperation "resultOption">]
-    member _.ResultOption (expr : ReqlExpr) : IConnection -> Task<'T option> = 
-        fun conn -> backgroundTask {
-            let! result = expr.RunResultAsync<'T> conn
-            return match (box >> isNull) result with true -> None | false -> Some result
-        }
+    member _.ResultOption expr = fun conn -> backgroundTask {
+        let! result = runResult<'T> conn expr
+        return noneIfNull result
+    }
     
     /// Execute the query, returning the result of the type specified, or None if no result is found
     [<CustomOperation "resultOption">]
     member this.ResultOption (expr, conn) =
         this.ResultOption expr conn
     
+    /// Execute the query with a cancellation token, returning the result of the type specified, or None if no result is
+    /// found
+    [<CustomOperation "resultOption">]
+    member _.ResultOption (expr, cancelToken) = fun conn -> backgroundTask {
+        let! result = runResultWithCancel<'T> cancelToken conn expr
+        return noneIfNull result
+    }
+    
+    /// Execute the query with a cancellation token, returning the result of the type specified, or None if no result is
+    /// found
+    [<CustomOperation "resultOption">]
+    member this.ResultOption (expr : ReqlExpr, cancelToken : CancellationToken, conn) =
+        this.ResultOption (expr, cancelToken) conn
+    
+    /// Execute the query with optional arguments, returning the result of the type specified, or None if no result is
+    /// found
+    [<CustomOperation "resultOption">]
+    member _.ResultOption (expr, opts) = fun conn -> backgroundTask {
+        let! result = runResultWithOptArgs<'T> opts conn expr
+        return noneIfNull result
+    }
+    
+    /// Execute the query with optional arguments, returning the result of the type specified, or None if no result is
+    /// found
+    [<CustomOperation "resultOption">]
+    member this.ResultOption (expr, opts : RunOptArg list, conn) =
+        this.ResultOption (expr, opts) conn
+    
+    /// Execute the query with optional arguments and a cancellation token, returning the result of the type specified,
+    /// or None if no result is found
+    [<CustomOperation "resultOption">]
+    member _.ResultOption (expr, opts, cancelToken) = fun conn -> backgroundTask {
+        let! result = runResultWithOptArgsAndCancel<'T> opts cancelToken conn expr
+        return noneIfNull result
+    }
+    
+    /// Execute the query with optional arguments and a cancellation token, returning the result of the type specified,
+    /// or None if no result is found
+    [<CustomOperation "resultOption">]
+    member this.ResultOption (expr, opts : RunOptArg list, cancelToken : CancellationToken, conn) =
+        this.ResultOption (expr, opts, cancelToken) conn
+    
+    /// Execute the query, returning the result of the type specified using the given cancellation token
+    [<CustomOperation "asyncResult">]
+    member _.AsyncResult (expr, cancelToken) = fun conn -> async {
+        return! asyncResultWithCancel<'T> cancelToken conn expr
+    }
+    
+    /// Execute the query, returning the result of the type specified using the given cancellation token
+    [<CustomOperation "asyncResult">]
+    member _.AsyncResult (expr, cancelToken, conn) = asyncResultWithCancel<'T> cancelToken conn expr
+    
+    /// Execute the query, returning the result of the type specified
+    [<CustomOperation "asyncResult">]
+    member _.AsyncResult expr = fun conn -> async {
+        return! asyncResult<'T> conn expr
+    }
+    
+    /// Execute the query, returning the result of the type specified
+    [<CustomOperation "asyncResult">]
+    member _.AsyncResult (expr, conn) = asyncResult<'T> conn expr
+    
+    /// Execute the query, returning the result of the type specified, using optional arguments
+    [<CustomOperation "asyncResult">]
+    member _.AsyncResult (expr, args) = fun conn -> async {
+        return! asyncResultWithOptArgs<'T> args conn expr 
+    }
+    
+    /// Execute the query, returning the result of the type specified
+    [<CustomOperation "asyncResult">]
+    member _.AsyncResult (expr, args, conn) = asyncResultWithOptArgs<'T> args conn expr
+    
+    /// Execute the query, returning the result of the type specified, using optional arguments and a cancellation token
+    [<CustomOperation "asyncResult">]
+    member _.AsyncResult (expr, args, cancelToken) = fun conn -> async {
+        return! asyncResultWithOptArgsAndCancel<'T> args cancelToken conn expr 
+    }
+    
+    /// Execute the query, returning the result of the type specified, using optional arguments and a cancellation token
+    [<CustomOperation "asyncResult">]
+    member _.AsyncResult (expr, args, cancelToken, conn) =
+        asyncResultWithOptArgsAndCancel<'T> args cancelToken conn expr 
+    
+    /// Execute the query, returning the result of the type specified, or None if no result is found
+    [<CustomOperation "asyncOption">]
+    member _.AsyncOption expr = fun conn -> async {
+        let! result = asyncResult<'T> conn expr
+        return noneIfNull result
+    }
+    
+    /// Execute the query, returning the result of the type specified, or None if no result is found
+    [<CustomOperation "asyncOption">]
+    member this.AsyncOption (expr, conn) =
+        this.AsyncOption expr conn
+    
+    /// Execute the query with a cancellation token, returning the result of the type specified, or None if no result is
+    /// found
+    [<CustomOperation "asyncOption">]
+    member _.AsyncOption (expr, cancelToken) = fun conn -> async {
+        let! result = asyncResultWithCancel<'T> cancelToken conn expr
+        return noneIfNull result
+    }
+    
+    /// Execute the query with a cancellation token, returning the result of the type specified, or None if no result is
+    /// found
+    [<CustomOperation "asyncOption">]
+    member this.AsyncOption (expr : ReqlExpr, cancelToken : CancellationToken, conn) =
+        this.AsyncOption (expr, cancelToken) conn
+    
+    /// Execute the query with optional arguments, returning the result of the type specified, or None if no result is
+    /// found
+    [<CustomOperation "asyncOption">]
+    member _.AsyncOption (expr, opts) = fun conn -> async {
+        let! result = asyncResultWithOptArgs<'T> opts conn expr
+        return noneIfNull result
+    }
+    
+    /// Execute the query with optional arguments, returning the result of the type specified, or None if no result is
+    /// found
+    [<CustomOperation "asyncOption">]
+    member this.AsyncOption (expr, opts : RunOptArg list, conn) =
+        this.AsyncOption (expr, opts) conn
+    
+    /// Execute the query with optional arguments and a cancellation token, returning the result of the type specified,
+    /// or None if no result is found
+    [<CustomOperation "asyncOption">]
+    member _.AsyncOption (expr, opts, cancelToken) = fun conn -> async {
+        let! result = asyncResultWithOptArgsAndCancel<'T> opts cancelToken conn expr
+        return noneIfNull result
+    }
+    
+    /// Execute the query with optional arguments and a cancellation token, returning the result of the type specified,
+    /// or None if no result is found
+    [<CustomOperation "asyncOption">]
+    member this.AsyncOption (expr, opts : RunOptArg list, cancelToken : CancellationToken, conn) =
+        this.AsyncOption (expr, opts, cancelToken) conn
+    
+    /// Execute the query synchronously, returning the result of the type specified
+    [<CustomOperation "syncResult">]
+    member _.SyncResult expr = fun conn -> syncResult<'T> conn expr
+    
+    /// Execute the query synchronously, returning the result of the type specified
+    [<CustomOperation "syncResult">]
+    member _.SyncResult (expr, conn) = syncResult<'T> conn expr
+    
+    /// Execute the query synchronously, returning the result of the type specified, using optional arguments
+    [<CustomOperation "syncResult">]
+    member _.SyncResult (expr, args) = fun conn -> syncResultWithOptArgs<'T> args conn expr 
+    
+    /// Execute the query synchronously, returning the result of the type specified
+    [<CustomOperation "syncResult">]
+    member _.SyncResult (expr, args, conn) = syncResultWithOptArgs<'T> args conn expr
+    
+    /// Execute the query synchronously, returning the result of the type specified, or None if no result is found
+    [<CustomOperation "syncOption">]
+    member _.SyncOption expr = fun conn -> noneIfNull (syncResult<'T> conn expr)
+    
+    /// Execute the query synchronously, returning the result of the type specified, or None if no result is found
+    [<CustomOperation "syncOption">]
+    member _.SyncOption (expr, conn) = noneIfNull (syncResult<'T> conn expr)
+    
+    /// Execute the query synchronously with optional arguments, returning the result of the type specified, or None if
+    /// no result is found
+    [<CustomOperation "syncOption">]
+    member _.SyncOption (expr, opts) = fun conn -> noneIfNull (syncResultWithOptArgs<'T> opts conn expr)
+    
+    /// Execute the query synchronously with optional arguments, returning the result of the type specified, or None if
+    /// no result is found
+    [<CustomOperation "syncOption">]
+    member _.SyncOption (expr, opts, conn) = noneIfNull (syncResultWithOptArgs<'T> opts conn expr)
+    
     /// Perform a write operation
     [<CustomOperation "write">]
-    member _.Write (expr : ReqlExpr) : IConnection -> Task<Model.Result> =
-        fun conn ->
-            let result = expr.RunWriteAsync conn |> await
-            match result.Errors with
-            | 0UL -> Task.FromResult result
-            | _ -> raise <| ReqlRuntimeError result.FirstError
+    member _.Write expr = fun conn -> runWrite conn expr
 
     /// Perform a write operation
     [<CustomOperation "write">]
-    member this.Write (expr, conn) =
-        this.Write expr conn
+    member _.Write (expr, conn) = runWrite conn expr
+        
+    /// Perform a write operation using optional arguments
+    [<CustomOperation "write">]
+    member _.Write (expr, args) = fun conn -> runWriteWithOptArgs args conn expr
 
+    /// Perform a write operation using optional arguments
+    [<CustomOperation "write">]
+    member _.Write (expr, args, conn) = runWriteWithOptArgs args conn expr
+        
+    /// Perform a write operation using a cancellation token
+    [<CustomOperation "write">]
+    member _.Write (expr, cancelToken) = fun conn -> runWriteWithCancel cancelToken conn expr
+
+    /// Perform a write operation using a cancellation token
+    [<CustomOperation "write">]
+    member _.Write (expr, cancelToken, conn) = runWriteWithCancel cancelToken conn expr
+        
+    /// Perform a write operation using optional arguments and a cancellation token
+    [<CustomOperation "write">]
+    member _.Write (expr, args, cancelToken) = fun conn -> runWriteWithOptArgsAndCancel args cancelToken conn expr
+
+    /// Perform a write operation using optional arguments and a cancellation token
+    [<CustomOperation "write">]
+    member _.Write (expr, args, cancelToken, conn) = runWriteWithOptArgsAndCancel args cancelToken conn expr
+        
+    /// Perform a write operation
+    [<CustomOperation "asyncWrite">]
+    member _.AsyncWrite expr = fun conn -> asyncWrite conn expr
+
+    /// Perform a write operation
+    [<CustomOperation "asyncWrite">]
+    member _.AsyncWrite (expr, conn) = asyncWrite conn expr
+        
+    /// Perform a write operation using optional arguments
+    [<CustomOperation "asyncWrite">]
+    member _.AsyncWrite (expr, args) = fun conn -> asyncWriteWithOptArgs args conn expr
+
+    /// Perform a write operation using optional arguments
+    [<CustomOperation "asyncWrite">]
+    member _.AsyncWrite (expr, args, conn) = asyncWriteWithOptArgs args conn expr
+        
+    /// Perform a write operation using a cancellation token
+    [<CustomOperation "asyncWrite">]
+    member _.AsyncWrite (expr, cancelToken) = fun conn -> asyncWriteWithCancel cancelToken conn expr
+
+    /// Perform a write operation using a cancellation token
+    [<CustomOperation "asyncWrite">]
+    member _.AsyncWrite (expr, cancelToken, conn) = asyncWriteWithCancel cancelToken conn expr
+        
+    /// Perform a write operation using optional arguments and a cancellation token
+    [<CustomOperation "asyncWrite">]
+    member _.AsyncWrite (expr, args, cancelToken) = fun conn ->
+        asyncWriteWithOptArgsAndCancel args cancelToken conn expr
+
+    /// Perform a write operation using optional arguments and a cancellation token
+    [<CustomOperation "asyncWrite">]
+    member _.AsyncWrite (expr, args, cancelToken, conn) = asyncWriteWithOptArgsAndCancel args cancelToken conn expr
+        
+    /// Perform a synchronous write operation
+    [<CustomOperation "syncWrite">]
+    member _.SyncWrite expr = fun conn -> syncWrite conn expr
+
+    /// Perform a synchronous write operation
+    [<CustomOperation "syncWrite">]
+    member _.SyncWrite (expr, conn) = syncWrite conn expr
+        
+    /// Perform a write operation using optional arguments
+    [<CustomOperation "syncWrite">]
+    member _.SyncWrite (expr, args) = fun conn -> syncWriteWithOptArgs args conn expr
+
+    /// Perform a write operation using optional arguments
+    [<CustomOperation "syncWrite">]
+    member _.SyncWrite (expr, args, conn) = syncWriteWithOptArgs args conn expr
+        
+    /// Perform a write operation, returning a result even if there are errors
+    [<CustomOperation "writeResult">]
+    member _.WriteResult expr = fun conn -> runWriteResult conn expr
+
+    /// Perform a write operation, returning a result even if there are errors
+    [<CustomOperation "writeResult">]
+    member _.WriteResult (expr, conn) = runWriteResult conn expr
+        
+    /// Perform a write operation with optional arguments, returning a result even if there are errors
+    [<CustomOperation "writeResult">]
+    member _.WriteResult (expr, args) = fun conn -> runWriteResultWithOptArgs args conn expr
+
+    /// Perform a write operation with optional arguments, returning a result even if there are errors
+    [<CustomOperation "writeResult">]
+    member _.WriteResult (expr, args, conn) = runWriteResultWithOptArgs args conn expr
+        
+    /// Perform a write operation with a cancellation token, returning a result even if there are errors
+    [<CustomOperation "writeResult">]
+    member _.WriteResult (expr, cancelToken) = fun conn -> runWriteResultWithCancel cancelToken conn expr
+
+    /// Perform a write operation with a cancellation token, returning a result even if there are errors
+    [<CustomOperation "writeResult">]
+    member _.WriteResult (expr, cancelToken, conn) = runWriteResultWithCancel cancelToken conn expr
+        
+    /// Perform a write operation with optional arguments and a cancellation token, returning a result even if there are
+    /// errors
+    [<CustomOperation "writeResult">]
+    member _.WriteResult (expr, args, cancelToken) = fun conn ->
+        runWriteResultWithOptArgsAndCancel args cancelToken conn expr
+
+    /// Perform a write operation with optional arguments and a cancellation token, returning a result even if there are
+    /// errors
+    [<CustomOperation "writeResult">]
+    member _.WriteResult (expr, args, cancelToken, conn) = runWriteResultWithOptArgsAndCancel args cancelToken conn expr
+        
+    /// Perform a write operation, returning a result even if there are errors
+    [<CustomOperation "asyncWriteResult">]
+    member _.AsyncWriteResult expr = fun conn -> asyncWriteResult conn expr
+
+    /// Perform a write operation, returning a result even if there are errors
+    [<CustomOperation "asyncWriteResult">]
+    member _.AsyncWriteResult (expr, conn) = asyncWriteResult conn expr
+        
+    /// Perform a write operation with optional arguments, returning a result even if there are errors
+    [<CustomOperation "asyncWriteResult">]
+    member _.AsyncWriteResult (expr, args) = fun conn -> asyncWriteResultWithOptArgs args conn expr
+
+    /// Perform a write operation with optional arguments, returning a result even if there are errors
+    [<CustomOperation "asyncWriteResult">]
+    member _.AsyncWriteResult (expr, args, conn) = asyncWriteResultWithOptArgs args conn expr
+        
+    /// Perform a write operation with a cancellation token, returning a result even if there are errors
+    [<CustomOperation "asyncWriteResult">]
+    member _.AsyncWriteResult (expr, cancelToken) = fun conn -> asyncWriteResultWithCancel cancelToken conn expr
+
+    /// Perform a write operation with a cancellation token, returning a result even if there are errors
+    [<CustomOperation "asyncWriteResult">]
+    member _.AsyncWriteResult (expr, cancelToken, conn) = asyncWriteResultWithCancel cancelToken conn expr
+        
+    /// Perform a write operation with optional arguments and a cancellation token, returning a result even if there are
+    /// errors
+    [<CustomOperation "asyncWriteResult">]
+    member _.AsyncWriteResult (expr, args, cancelToken) = fun conn ->
+        asyncWriteResultWithOptArgsAndCancel args cancelToken conn expr
+
+    /// Perform a write operation with optional arguments and a cancellation token, returning a result even if there are
+    /// errors
+    [<CustomOperation "asyncWriteResult">]
+    member _.AsyncWriteResult (expr, args, cancelToken, conn) =
+        asyncWriteResultWithOptArgsAndCancel args cancelToken conn expr
+        
+    /// Perform a synchronous write operation, returning a result even if there are errors
+    [<CustomOperation "syncWriteResult">]
+    member _.SyncWriteResult expr = fun conn -> syncWriteResult conn expr
+
+    /// Perform a synchronous write operation, returning a result even if there are errors
+    [<CustomOperation "syncWriteResult">]
+    member _.SyncWriteResult (expr, conn) = syncWriteResult conn expr
+        
+    /// Perform a synchronous write operation with optional arguments, returning a result even if there are errors
+    [<CustomOperation "syncWriteResult">]
+    member _.SyncWriteResult (expr, args) = fun conn -> syncWriteResultWithOptArgs args conn expr
+
+    /// Perform a synchronous write operation with optional arguments, returning a result even if there are errors
+    [<CustomOperation "syncWriteResult">]
+    member _.SyncWriteResult (expr, args, conn) = syncWriteResultWithOptArgs args conn expr
+        
     /// Ignore the result of an operation
     [<CustomOperation "ignoreResult">]
-    member _.IgnoreResult<'T> (f : IConnection -> Task<'T>) =
-        fun conn -> task {
-            let! _ = (f conn).ConfigureAwait false
-            ()
-        }
-
-    /// Ignore the result of an operation
-    [<CustomOperation "ignoreResult">]
-    member _.IgnoreResult (f : IConnection -> Task<'T option>) =
-        fun conn -> task {
-            let! _ = (f conn).ConfigureAwait false
-            ()
-        }
+    member _.IgnoreResult (f : IConnection -> Task<'T>) = fun conn -> task {
+        let! _ = (f conn).ConfigureAwait false
+        ()
+    }
 
     /// Ignore the result of an operation
     [<CustomOperation "ignoreResult">]
@@ -394,71 +775,166 @@ type RethinkBuilder<'T> () =
         this.IgnoreResult f conn
 
     /// Ignore the result of an operation
-    [<CustomOperation "ignoreResult">]
-    member this.IgnoreResult (f : IConnection -> Task<'T option>, conn) =
-        this.IgnoreResult f conn
+    [<CustomOperation "ignoreAsync">]
+    member _.IgnoreAsync (f : IConnection -> Async<'T>) = fun conn -> f conn |> Async.Ignore
+
+    /// Ignore the result of an operation
+    [<CustomOperation "ignoreAsync">]
+    member this.IgnoreAsync (f : IConnection -> Async<'T>, conn) = this.IgnoreAsync f conn
+
+    /// Ignore the result of a synchronous operation
+    [<CustomOperation "ignoreSync">]
+    member _.IgnoreSync (f : IConnection -> 'T) = fun conn -> f conn |> ignore
+
+    /// Ignore the result of a synchronous operation
+    [<CustomOperation "ignoreSync">]
+    member this.IgnoreSync (f : IConnection -> 'T, conn) = this.IgnoreSync f conn
 
     // Reconnection
 
     /// Retries a variable number of times, waiting each time for the seconds specified
     [<CustomOperation "withRetry">]
-    member _.WithRetry (f : IConnection -> Task<'T>, retries) =
-        Retry.withRetry f retries
+    member _.WithRetry (f, retries) = withRetry<'T> retries f
 
     /// Retries a variable number of times, waiting each time for the seconds specified
     [<CustomOperation "withRetry">]
-    member _.WithRetry (f : IConnection -> Task<'T option>, retries) =
-        Retry.withRetry f retries
-
-    /// Retries a variable number of times, waiting each time for the seconds specified
-    [<CustomOperation "withRetry">]
-    member this.WithRetry (f : IConnection -> Task<'T>, retries, conn) =
-        this.WithRetry (f, retries) conn
+    member _.WithRetry (f, retries, conn) = withRetry<'T> retries f conn
    
     /// Retries a variable number of times, waiting each time for the seconds specified
-    [<CustomOperation "withRetry">]
-    member this.WithRetry (f : IConnection -> Task<'T option>, retries, conn) =
-        this.WithRetry (f, retries) conn
+    [<CustomOperation "withRetryOption">]
+    member _.WithRetryOption (f, retries) = withRetry<'T option> retries f
+
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withRetryOption">]
+    member _.WithRetryOption (f, retries, conn) = withRetry<'T option> retries f conn
+   
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withAsyncRetry">]
+    member _.WithAsyncRetry (f, retries) = withAsyncRetry<'T> retries f
+
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withAsyncRetry">]
+    member _.WithAsyncRetry (f, retries, conn) = withAsyncRetry<'T> retries f conn
+   
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withAsyncRetryOption">]
+    member _.WithAsyncRetryOption (f, retries) = withAsyncRetry<'T option> retries f
+
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withAsyncRetryOption">]
+    member _.WithAsyncRetryOption (f, retries, conn) = withAsyncRetry<'T option> retries f conn
+   
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withSyncRetry">]
+    member _.WithSyncRetry (f, retries) = withSyncRetry<'T> retries f
+
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withSyncRetry">]
+    member _.WithSyncRetry (f, retries, conn) = withSyncRetry<'T> retries f conn
+   
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withSyncRetryOption">]
+    member _.WithSyncRetryOption (f, retries) = withSyncRetry<'T option> retries f
+
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withSyncRetryOption">]
+    member _.WithSyncRetryOption (f, retries, conn) = withSyncRetry<'T option> retries f conn
    
     /// Retries at 200ms, 500ms, and 1s
     [<CustomOperation "withRetryDefault">]
-    member _.WithRetryDefault (f : IConnection -> Task<'T>) =
-        Retry.withRetryDefault f
+    member _.WithRetryDefault f = withRetryDefault<'T> f
 
     /// Retries at 200ms, 500ms, and 1s
     [<CustomOperation "withRetryDefault">]
-    member _.WithRetryDefault (f : IConnection -> Task<'T option>) =
-        Retry.withRetryDefault f
+    member _.WithRetryDefault (f, conn) = withRetryDefault<'T> f conn
 
     /// Retries at 200ms, 500ms, and 1s
-    [<CustomOperation "withRetryDefault">]
-    member this.WithRetryDefault (f : IConnection -> Task<'T>, conn) =
-        this.WithRetryDefault f conn
+    [<CustomOperation "withRetryOptionDefault">]
+    member _.WithRetryOptionDefault f = withRetryDefault<'T option> f
 
     /// Retries at 200ms, 500ms, and 1s
-    [<CustomOperation "withRetryDefault">]
-    member this.WithRetryDefault (f : IConnection -> Task<'T option>, conn) =
-        this.WithRetryDefault f conn
+    [<CustomOperation "withRetryOptionDefault">]
+    member _.WithRetryOptionDefault (f, conn) = withRetryDefault<'T option> f conn
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withAsyncRetryDefault">]
+    member _.WithAsyncRetryDefault f = withAsyncRetryDefault<'T> f
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withAsyncRetryDefault">]
+    member _.WithAsyncRetryDefault (f, conn) = withAsyncRetryDefault<'T> f conn
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withAsyncRetryOptionDefault">]
+    member _.WithAsyncRetryOptionDefault f = withAsyncRetryDefault<'T option> f
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withAsyncRetryOptionDefault">]
+    member _.WithAsyncRetryOptionDefault (f, conn) = withAsyncRetryDefault<'T option> f conn
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withSyncRetryDefault">]
+    member _.WithSyncRetryDefault f = withSyncRetryDefault<'T> f
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withSyncRetryDefault">]
+    member _.WithSyncRetryDefault (f, conn) = withSyncRetryDefault<'T> f conn
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withSyncRetryOptionDefault">]
+    member _.WithSyncRetryOptionDefault f = withSyncRetryDefault<'T option> f
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withSyncRetryOptionDefault">]
+    member _.WithSyncRetryOptionDefault (f, conn) = withSyncRetryDefault<'T option> f conn
 
     /// Retries once immediately
     [<CustomOperation "withRetryOnce">]
-    member _.WithRetryOnce (f : IConnection -> Task<'T>) =
-        Retry.withRetryOnce f
+    member _.WithRetryOnce f = withRetryOnce<'T> f
 
     /// Retries once immediately
     [<CustomOperation "withRetryOnce">]
-    member _.WithRetryOnce (f : IConnection -> Task<'T option>) =
-        Retry.withRetryOnce f
+    member _.WithRetryOnce (f, conn) = withRetryOnce<'T> f conn
 
     /// Retries once immediately
-    [<CustomOperation "withRetryOnce">]
-    member this.WithRetryOnce (f : IConnection -> Task<'T>, conn) =
-        this.WithRetryOnce f conn
+    [<CustomOperation "withRetryOptionOnce">]
+    member _.WithRetryOptionOnce f = withRetryOnce<'T option> f
 
     /// Retries once immediately
-    [<CustomOperation "withRetryOnce">]
-    member this.WithRetryOnce (f : IConnection -> Task<'T option>, conn) =
-        this.WithRetryOnce f conn
+    [<CustomOperation "withRetryOptionOnce">]
+    member _.WithRetryOptionOnce (f, conn) = withRetryOnce<'T option> f conn
+
+    /// Retries once immediately
+    [<CustomOperation "withAsyncRetryOnce">]
+    member _.WithAsyncRetryOnce f = withAsyncRetryOnce<'T> f
+
+    /// Retries once immediately
+    [<CustomOperation "withAsyncRetryOnce">]
+    member _.WithAsyncRetryOnce (f, conn) = withAsyncRetryOnce<'T> f conn
+
+    /// Retries once immediately
+    [<CustomOperation "withAsyncRetryOptionOnce">]
+    member _.WithAsyncRetryOptionOnce f = withAsyncRetryOnce<'T option> f
+
+    /// Retries once immediately
+    [<CustomOperation "withAsyncRetryOptionOnce">]
+    member _.WithAsyncRetryOptionOnce (f, conn) = withAsyncRetryOnce<'T option> f conn
+
+    /// Retries once immediately
+    [<CustomOperation "withSyncRetryOnce">]
+    member _.WithSyncRetryOnce f = withSyncRetryOnce<'T> f
+
+    /// Retries once immediately
+    [<CustomOperation "withSyncRetryOnce">]
+    member _.WithSyncRetryOnce (f, conn) = withSyncRetryOnce<'T> f conn
+
+    /// Retries once immediately
+    [<CustomOperation "withSyncRetryOptionOnce">]
+    member _.WithSyncRetryOptionOnce f = withSyncRetryOnce<'T option> f
+
+    /// Retries once immediately
+    [<CustomOperation "withSyncRetryOptionOnce">]
+    member _.WithSyncRetryOptionOnce (f, conn) = withSyncRetryOnce<'T option> f conn
 
 
 /// RethinkDB computation expression
