@@ -118,6 +118,14 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "indexCreate">]
     member _.IndexCreate (tbl, index, js, opts) = indexCreateJSWithOptArgs index js opts tbl
 
+    /// Create an index for a table, using an object expression
+    [<CustomOperation "indexCreate">]
+    member _.IndexCreate (tbl, index, expr : obj) = indexCreateObj index expr tbl
+    
+    /// Create an index for a table, using an object expression and optional arguments
+    [<CustomOperation "indexCreate">]
+    member _.IndexCreate (tbl, index, expr : obj, opts) = indexCreateObjWithOptArgs index expr opts tbl
+    
     /// Drop an index for a table
     [<CustomOperation "indexDrop">]
     member _.IndexDrop (tbl, index) = indexDrop index tbl
