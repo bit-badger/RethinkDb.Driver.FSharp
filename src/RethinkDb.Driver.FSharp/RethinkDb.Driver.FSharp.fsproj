@@ -11,7 +11,7 @@
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
     <VersionPrefix>0.8.0</VersionPrefix>
-    <VersionSuffix>alpha-0008</VersionSuffix>
+    <VersionSuffix>alpha-0009</VersionSuffix>
     <PackageReleaseNotes>Alpha; use at your own risk</PackageReleaseNotes>
   </PropertyGroup>
 

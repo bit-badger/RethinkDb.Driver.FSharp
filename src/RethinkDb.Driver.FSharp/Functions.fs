@@ -187,6 +187,14 @@ let delete (expr : ReqlExpr) =
 let deleteWithOptArgs args (expr : ReqlExpr) =
     delete expr |> DeleteOptArg.apply args
 
+/// Only retrieve distinct entries from a selection
+let distinct (expr : ReqlExpr) =
+    expr.Distinct ()
+
+/// Only retrieve distinct entries from a selection, based on an index
+let distinctWithIndex expr (index : string) =
+    (distinct expr).OptArg ("index", index)
+
 /// EqJoin the left field on the right-hand table using its primary key
 let eqJoin (field : string) (table : Table) (expr : ReqlExpr) =
     expr.EqJoin (field, table)
@@ -279,14 +287,6 @@ let indexCreateJS (indexName : string) js (table : Table) =
 let indexCreateJSWithOptArgs indexName js args table =
     indexCreateJS indexName js table |> IndexCreateOptArg.apply args
 
-/// Create an index on the given table using the give expression
-let indexCreateObj (indexName : string) (expr : obj) (table : Table) =
-    table.IndexCreate (indexName, expr)
-    
-/// Create an index on the given table using the give expression, including optional arguments
-let indexCreateObjWithOptArgs indexName (expr : obj) args table =
-    indexCreateObj indexName expr table |> IndexCreateOptArg.apply args
-    
 /// Drop an index
 let indexDrop (indexName : string) (table : Table) =
     table.IndexDrop indexName

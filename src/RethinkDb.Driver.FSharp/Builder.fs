@@ -118,14 +118,6 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "indexCreate">]
     member _.IndexCreate (tbl, index, js, opts) = indexCreateJSWithOptArgs index js opts tbl
 
-    /// Create an index for a table, using an object expression
-    [<CustomOperation "indexCreate">]
-    member _.IndexCreate (tbl, index, expr : obj) = indexCreateObj index expr tbl
-    
-    /// Create an index for a table, using an object expression and optional arguments
-    [<CustomOperation "indexCreate">]
-    member _.IndexCreate (tbl, index, expr : obj, opts) = indexCreateObjWithOptArgs index expr opts tbl
-    
     /// Drop an index for a table
     [<CustomOperation "indexDrop">]
     member _.IndexDrop (tbl, index) = indexDrop index tbl
@@ -187,6 +179,14 @@ type RethinkBuilder<'T> () =
     /// Count documents for the current query
     [<CustomOperation "count">]
     member _.Count (expr, js) = countJS js expr
+    
+    /// Select distinct values from the sequence
+    [<CustomOperation "distinct">]
+    member _.Distinct expr = distinct expr
+    
+    /// Select distinct values from the sequence using an index
+    [<CustomOperation "distinct">]
+    member _.Distinct (expr, index) = distinctWithIndex expr index
     
     /// Filter a query by a single field value
     [<CustomOperation "filter">]
