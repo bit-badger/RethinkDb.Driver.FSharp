@@ -13,12 +13,9 @@ let retryPolicy (intervals : float seq) (conn : IConnection) =
         .WaitAndRetryAsync(
             intervals |> Seq.map TimeSpan.FromSeconds,
             System.Action<exn, TimeSpan, int, Context> (fun ex _ _ _ ->
-                printf $"Encountered RethinkDB exception: {ex.Message}"
-                match ex.Message.Contains "socket" with
-                | true ->
-                    printf "Reconnecting to RethinkDB"
-                    (conn :?> Connection).Reconnect false
-                | false -> ()))
+                printfn $"Encountered RethinkDB exception: {ex.Message}"
+                printfn "Reconnecting to RethinkDB..."
+                (conn :?> Connection).Reconnect false))
 
 /// Create a retry policy that attempts to reconnect to RethinkDB when a synchronous operation encounters an error
 let retryPolicySync (intervals : float seq) (conn : IConnection) =

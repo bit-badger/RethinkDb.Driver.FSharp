@@ -5,12 +5,11 @@ Idiomatic F# extensions for the C# RethinkDB driver
 
 ## Using
 
-Install the [NuGet](https://www.nuget.org/packages/RethinkDb.Driver.FSharp/) package `RethinkDb.Driver.FSharp`. You will need to specify pre-release, as the package has an alpha designation at this time.
+Install the [NuGet](https://www.nuget.org/packages/RethinkDb.Driver.FSharp/) package `RethinkDb.Driver.FSharp`. You will need to specify pre-release, as the package currently has a beta designation.
 
-## Goals
+## What It Provides
 
-The goal is to provide:
-- A composable pipeline for creating ReQL statements:
+### A composable pipeline for creating ReQL statements
 
 ```fsharp
 open RethinkDb.Driver.FSharp.Functions
@@ -24,7 +23,7 @@ let fetchPost (postId : string) =
     |> withRetryDefault
 ```
 
-- An F# domain-specific language (DSL) using a `rethink` computation expression (CE):
+### An F# domain-specific language (DSL) using a `rethink` computation expression (CE)
 
 ```fsharp
 open RethinkDb.Driver.FSharp
@@ -39,7 +38,7 @@ let fetchPost (postId : string) =
     }
 ```
 
-- A standard way to translate JSON into a strongly-typed configuration:
+### A standard way to translate JSON into a strongly-typed configuration
 
 ```fsharp
 /// type: DataConfig
@@ -55,15 +54,15 @@ let conn = config.Connect ()
 let! post = fetchPost "the-post-id" conn
 ```
 
-- Robust queries
+### Robust queries
 
 The RethinkDB connection is generally stored as a singleton. Over time, this connection can lose its connection to the server. Both the CE and functions have `withRetryDefault`, which will retry a failed command up to 3 times (4 counting the initial try), waiting 200ms, 500ms, and 1 second between the respective attempts. There are other options as well; `withRetryOnce` will retry one time immediately. `withRetry` takes a list of `float`s, which will be interpreted as seconds to delay between each retry; it will retry until it has exhausted the delays.
 
 The examples above both use the default retry logic.
 
-- Only rename functions/methods where required
+### Only rename functions/methods where required
 
-Within the CE, there are a few differing names, mostly notably at the start (selecting databases and tables); this is to allow for a more natural language flow. Its names may change in the 0.8.x series; it is the most alpha part of the project at this point. Also, while CEs now support overloading (thank you F# 6 developers!), they do not detect if the first value in the tupled arguments is different. This is most noticeable once `result*` or `write*` commands have been issued; these support `Task<'T>`, `Async<'T>`, and synchronous `'T` operations, but the follow-on commands will be different (e.x. `withRetryDefault` (tasks) vs. `withAsyncRetryDefault` vs. `withSyncRetryDefault`). There are also versions of these that support optional arguments (for all) and cancellation tokens (for task/async).
+Within the CE, there are a few differing names, mostly notably at the start (selecting databases and tables); this is to allow for a more natural language flow. Also, while CEs now support overloading (thank you F# 6 developers!), they do not detect if the first value in the tupled arguments is different. This is most noticeable once `result*` or `write*` commands have been issued; these support `Task<'T>`, `Async<'T>`, and synchronous `'T` operations, but the follow-on commands will be different (e.x. `withRetryDefault` (tasks) vs. `withAsyncRetryDefault` vs. `withSyncRetryDefault`). There are also versions of these that support optional arguments (for all) and cancellation tokens (for task/async).
 
 The functions show this pattern throughout, as functions in a module do not support overloading; an example for `filter` is below.
 
@@ -88,4 +87,3 @@ license on this project's dependencies. Please see [the heading on the C# driver
 If you are using the project, feel free to file issues about your pain points; there is no substitute for real-world feedback!
 
 [license]: https://github.com/bchavez/RethinkDb.Driver#open-source-and-commercial-licensing
-[nuget]: https://ci.appveyor.com/nuget/danieljsummers-rethinkdb-driver-fsharp
