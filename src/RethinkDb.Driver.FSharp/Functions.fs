@@ -4,6 +4,7 @@ module RethinkDb.Driver.FSharp.Functions
 open System.Threading
 open RethinkDb.Driver
 open RethinkDb.Driver.Ast
+open RethinkDb.Driver.Net
 
 [<AutoOpen>]
 module private Helpers =
@@ -16,122 +17,167 @@ module private Helpers =
 // ~~ EXECUTION ~~
 
 /// Get a cursor with the results of an expression
-let asyncCursor<'T> conn (expr : ReqlExpr) =
+let asyncCursor<'T> (expr : ReqlExpr) conn =
     expr.RunCursorAsync<'T> conn
     |> Async.AwaitTask
 
+// ~~ WRITES ~~
+    
+/// Write a ReQL command with a cancellation token, always returning a result
+let runWriteResultWithCancel cancelToken (expr : ReqlExpr) = fun conn ->
+    expr.RunWriteAsync (conn, cancelToken)
+
+/// Write a ReQL command, always returning a result
+let runWriteResult expr = runWriteResultWithCancel CancellationToken.None expr
+
+/// Write a ReQL command with optional arguments and a cancellation token, always returning a result
+let runWriteResultWithOptArgsAndCancel args cancelToken (expr : ReqlExpr) = fun conn ->
+    expr.RunWriteAsync (conn, RunOptArg.create args, cancelToken)
+
+/// Write a ReQL command with optional arguments, always returning a result
+let runWriteResultWithOptArgs args expr = runWriteResultWithOptArgsAndCancel args CancellationToken.None expr
+
+/// Write a ReQL command, always returning a result
+let asyncWriteResult expr = fun conn ->
+    runWriteResult expr conn |> Async.AwaitTask
+
+/// Write a ReQL command with optional arguments, always returning a result
+let asyncWriteResultWithOptArgs args expr = fun conn ->
+    runWriteResultWithOptArgs args expr conn |> Async.AwaitTask
+
+/// Write a ReQL command with a cancellation token, always returning a result
+let asyncWriteResultWithCancel cancelToken expr = fun conn ->
+    runWriteResultWithCancel cancelToken expr conn |> Async.AwaitTask
+
+/// Write a ReQL command with optional arguments and a cancellation token, always returning a result
+let asyncWriteResultWithOptArgsAndCancel args cancelToken expr = fun conn ->
+    runWriteResultWithOptArgsAndCancel args cancelToken expr conn |> Async.AwaitTask
+
+/// Write a ReQL command synchronously, always returning a result
+let syncWriteResult expr = fun conn ->
+    asyncWriteResult expr conn |> Async.RunSynchronously
+
+/// Write a ReQL command synchronously with optional arguments, always returning a result
+let syncWriteResultWithOptArgs args expr = fun conn ->
+    asyncWriteResultWithOptArgs args expr conn |> Async.RunSynchronously
+
 /// Raise an exception if a write command encountered an error
-let private raiseIfWriteError (result : Model.Result) =
+let raiseIfWriteError (result : Model.Result) =
     match result.Errors with
     | 0UL -> result
     | _ -> raise <| ReqlRuntimeError result.FirstError
     
 /// Write a ReQL command, raising an exception if an error occurs
-let runWriteWithCancel cancelToken conn (expr : ReqlExpr) = backgroundTask {
-    let! result = expr.RunWriteAsync (conn, cancelToken)
+let runWriteWithCancel cancelToken expr = fun conn -> backgroundTask {
+    let! result = runWriteResultWithCancel cancelToken expr conn
     return raiseIfWriteError result
 }
 
 /// Write a ReQL command, raising an exception if an error occurs
-let runWrite conn expr = runWriteWithCancel CancellationToken.None conn expr
+let runWrite expr = runWriteWithCancel CancellationToken.None expr
 
 /// Write a ReQL command with optional arguments, raising an exception if an error occurs
-let runWriteWithOptArgsAndCancel args cancelToken conn (expr : ReqlExpr) = backgroundTask {
-    let! result = expr.RunWriteAsync (conn, RunOptArg.create args, cancelToken)
+let runWriteWithOptArgsAndCancel args cancelToken expr = fun conn -> backgroundTask {
+    let! result = runWriteResultWithOptArgsAndCancel args cancelToken expr conn
     return raiseIfWriteError result
 }
 
 /// Write a ReQL command with optional arguments, raising an exception if an error occurs
-let runWriteWithOptArgs args conn expr = runWriteWithOptArgsAndCancel args CancellationToken.None conn expr
+let runWriteWithOptArgs args expr = runWriteWithOptArgsAndCancel args CancellationToken.None expr
 
 /// Write a ReQL command, raising an exception if an error occurs
-let asyncWrite conn expr = runWrite conn expr |> Async.AwaitTask
+let asyncWrite expr = fun conn ->
+    runWrite expr conn |> Async.AwaitTask
 
 /// Write a ReQL command with optional arguments, raising an exception if an error occurs
-let asyncWriteWithOptArgs args conn expr = runWriteWithOptArgs args conn expr |> Async.AwaitTask
+let asyncWriteWithOptArgs args expr = fun conn ->
+    runWriteWithOptArgs args expr conn |> Async.AwaitTask
 
 /// Write a ReQL command, raising an exception if an error occurs
-let asyncWriteWithCancel cancelToken conn expr = runWriteWithCancel cancelToken conn expr |> Async.AwaitTask
+let asyncWriteWithCancel cancelToken expr = fun conn ->
+    runWriteWithCancel cancelToken expr conn |> Async.AwaitTask
 
 /// Write a ReQL command with optional arguments, raising an exception if an error occurs
-let asyncWriteWithOptArgsAndCancel args cancelToken conn expr =
-    runWriteWithOptArgsAndCancel args cancelToken conn expr |> Async.AwaitTask
+let asyncWriteWithOptArgsAndCancel args cancelToken expr = fun conn ->
+    runWriteWithOptArgsAndCancel args cancelToken expr conn |> Async.AwaitTask
 
 /// Write a ReQL command synchronously, raising an exception if an error occurs
-let syncWrite conn expr = asyncWrite conn expr |> Async.RunSynchronously
+let syncWrite expr = fun conn ->
+    asyncWrite expr conn |> Async.RunSynchronously
 
 /// Write a ReQL command synchronously with optional arguments, raising an exception if an error occurs
-let syncWriteWithOptArgs args conn expr = asyncWriteWithOptArgs args conn expr |> Async.RunSynchronously
+let syncWriteWithOptArgs args expr = fun conn ->
+    asyncWriteWithOptArgs args expr conn |> Async.RunSynchronously
 
-/// Write a ReQL command with a cancellation token, always returning a result
-let runWriteResultWithCancel cancelToken conn (expr : ReqlExpr) =
-    expr.RunWriteAsync (conn, cancelToken)
-
-/// Write a ReQL command, always returning a result
-let runWriteResult conn expr = runWriteResultWithCancel CancellationToken.None conn expr
-
-/// Write a ReQL command with optional arguments and a cancellation token, always returning a result
-let runWriteResultWithOptArgsAndCancel args cancelToken conn (expr : ReqlExpr) =
-    expr.RunWriteAsync (conn, RunOptArg.create args, cancelToken)
-
-/// Write a ReQL command with optional arguments, always returning a result
-let runWriteResultWithOptArgs args conn expr = runWriteResultWithOptArgsAndCancel args CancellationToken.None conn expr
-
-/// Write a ReQL command, always returning a result
-let asyncWriteResult conn expr = runWriteResult conn expr |> Async.AwaitTask
-
-/// Write a ReQL command with optional arguments, always returning a result
-let asyncWriteResultWithOptArgs args conn expr = runWriteResultWithOptArgs args conn expr |> Async.AwaitTask
-
-/// Write a ReQL command with a cancellation token, always returning a result
-let asyncWriteResultWithCancel cancelToken conn expr = runWriteResultWithCancel cancelToken conn expr |> Async.AwaitTask
-
-/// Write a ReQL command with optional arguments and a cancellation token, always returning a result
-let asyncWriteResultWithOptArgsAndCancel args cancelToken conn expr =
-    runWriteResultWithOptArgsAndCancel args cancelToken conn expr |> Async.AwaitTask
-
-/// Write a ReQL command synchronously, always returning a result
-let syncWriteResult conn expr = asyncWriteResult conn expr |> Async.RunSynchronously
-
-/// Write a ReQL command synchronously with optional arguments, always returning a result
-let syncWriteResultWithOptArgs args conn expr = asyncWriteResultWithOptArgs args conn expr |> Async.RunSynchronously
-
+// ~~ QUERY RESULTS AND MANIPULATION ~~
+    
 /// Run the ReQL command using a cancellation token, returning the result as the type specified
-let runResultWithCancel<'T> cancelToken conn (expr : ReqlExpr) = expr.RunResultAsync<'T> (conn, cancelToken)
+let runResultWithCancel<'T> cancelToken (expr : ReqlExpr) = fun conn ->
+    expr.RunResultAsync<'T> (conn, cancelToken)
 
-/// Run the ReQL command using optional arguments and a cancellation token, returning the result as the type specified
-let runResultWithOptArgsAndCancel<'T> args cancelToken conn (expr : ReqlExpr) =
+/// Run the ReQL command using optional arguments and a cancellation token, returning the result as the type
+/// specified
+let runResultWithOptArgsAndCancel<'T> args cancelToken (expr : ReqlExpr) = fun conn ->
     expr.RunResultAsync<'T> (conn, RunOptArg.create args, cancelToken)
 
 /// Run the ReQL command, returning the result as the type specified
-let runResult<'T> = runResultWithCancel<'T> CancellationToken.None
+let runResult<'T> expr = runResultWithCancel<'T> CancellationToken.None expr
 
 /// Run the ReQL command using optional arguments, returning the result as the type specified
-let runResultWithOptArgs<'T> args = runResultWithOptArgsAndCancel<'T> args CancellationToken.None
+let runResultWithOptArgs<'T> args expr = runResultWithOptArgsAndCancel<'T> args CancellationToken.None expr
 
 /// Run the ReQL command, returning the result as the type specified
-let asyncResult<'T> conn expr =
+let asyncResult<'T> expr = fun conn ->
     runResult<'T> expr conn |> Async.AwaitTask
 
 /// Run the ReQL command using optional arguments, returning the result as the type specified
-let asyncResultWithOptArgs<'T> args conn expr =
-    runResultWithOptArgs<'T> args conn expr |> Async.AwaitTask
+let asyncResultWithOptArgs<'T> args expr = fun conn ->
+    runResultWithOptArgs<'T> args expr conn |> Async.AwaitTask
 
 /// Run the ReQL command using a cancellation token, returning the result as the type specified
-let asyncResultWithCancel<'T> cancelToken conn (expr : ReqlExpr) =
-    runResultWithCancel<'T> cancelToken conn expr |> Async.AwaitTask
+let asyncResultWithCancel<'T> cancelToken expr = fun conn ->
+    runResultWithCancel<'T> cancelToken expr conn |> Async.AwaitTask
 
-/// Run the ReQL command using optional arguments and a cancellation token, returning the result as the type specified
-let asyncResultWithOptArgsAndCancel<'T> args cancelToken conn expr =
-    runResultWithOptArgsAndCancel<'T> args cancelToken conn expr |> Async.AwaitTask
+/// Run the ReQL command using optional arguments and a cancellation token, returning the result as the type
+/// specified
+let asyncResultWithOptArgsAndCancel<'T> args cancelToken expr = fun conn ->
+    runResultWithOptArgsAndCancel<'T> args cancelToken expr conn |> Async.AwaitTask
 
 /// Run the ReQL command, returning the result as the type specified
-let syncResult<'T> conn expr =
+let syncResult<'T> expr = fun conn ->
     asyncResult<'T> expr conn |> Async.RunSynchronously
 
 /// Run the ReQL command using optional arguments, returning the result as the type specified
-let syncResultWithOptArgs<'T> args conn expr =
-    asyncResultWithOptArgs<'T> args conn expr |> Async.RunSynchronously
+let syncResultWithOptArgs<'T> args expr = fun conn ->
+    asyncResultWithOptArgs<'T> args expr conn |> Async.RunSynchronously
+
+/// Convert a null item to an option (works for value types as well as reference types)
+let nullToOption<'T> (it : 'T) =
+    if isNull (box it) then None else Some it
+
+/// Convert a possibly-null result to an option
+let asOption (f : IConnection -> Tasks.Task<'T>) conn = backgroundTask {
+    let! result = f conn
+    return nullToOption result
+}
+
+/// Convert a possibly-null result to an option
+let asAsyncOption (f : IConnection -> Async<'T>) conn = async {
+    let! result = f conn
+    return nullToOption result
+}
+
+/// Convert a possibly-null result to an option
+let asSyncOption (f : IConnection -> 'T) conn = nullToOption (f conn)
+
+/// Ignore the result of a task-based query
+let ignoreResult<'T> (f : IConnection -> Tasks.Task<'T>) conn = task {
+    let! _ = (f conn).ConfigureAwait false
+    ()
+}
+
+/// Apply a connection to the query pipeline (typically the final step)
+let withConn<'T> conn (f : IConnection -> 'T) = f conn
 
 // ~~ QUERY DEFINITION ~~
 
@@ -192,7 +238,7 @@ let distinct (expr : ReqlExpr) =
     expr.Distinct ()
 
 /// Only retrieve distinct entries from a selection, based on an index
-let distinctWithIndex expr (index : string) =
+let distinctWithIndex (index : string) expr =
     (distinct expr).OptArg ("index", index)
 
 /// EqJoin the left field on the right-hand table using its primary key
@@ -224,7 +270,7 @@ let filter (filterSpec : obj) (expr : ReqlExpr) =
     expr.Filter filterSpec
 
 /// Filter documents, providing optional arguments
-let filterWithOptArgs (filterSpec : obj) arg expr =
+let filterWithOptArg (filterSpec : obj) arg expr =
     filter filterSpec expr |> FilterOptArg.apply arg
 
 /// Filter documents using a function
@@ -232,7 +278,7 @@ let filterFunc f (expr : ReqlExpr) =
     expr.Filter (ReqlFunction1 f)
 
 /// Filter documents using a function, providing optional arguments
-let filterFuncWithOptArgs f arg expr =
+let filterFuncWithOptArg f arg expr =
     filterFunc f expr |> FilterOptArg.apply arg
 
 /// Filter documents using multiple functions (has the effect of ANDing them)
@@ -240,7 +286,7 @@ let filterFuncAll fs expr =
     (fs |> List.fold (fun (e : ReqlExpr) f -> filterFunc f e) expr) :?> Filter
 
 /// Filter documents using multiple functions (has the effect of ANDing them), providing optional arguments
-let filterFuncAllWithOptArgs fs arg expr =
+let filterFuncAllWithOptArg fs arg expr =
     filterFuncAll fs expr |> FilterOptArg.apply arg
 
 /// Filter documents using JavaScript
@@ -248,7 +294,7 @@ let filterJS js (expr : ReqlExpr) =
     expr.Filter (toJS js)
 
 /// Filter documents using JavaScript, providing optional arguments
-let filterJSWithOptArgs js arg expr =
+let filterJSWithOptArg js arg expr =
     filterJS js expr |> FilterOptArg.apply arg
 
 /// Get a document by its primary key
@@ -328,19 +374,19 @@ let innerJoinJS (otherSeq : obj) js (expr : ReqlExpr) =
     expr.InnerJoin (otherSeq, toJS js)
 
 /// Insert a single document (use insertMany for multiple)
-let insert (doc : obj) (table : Table) =
+let insert<'T> (doc : 'T) (table : Table) =
     table.Insert doc
 
 /// Insert multiple documents
-let insertMany (docs : obj seq) (table : Table) =
+let insertMany<'T> (docs : 'T seq) (table : Table) =
     table.Insert (Array.ofSeq docs)
 
 /// Insert a single document, providing optional arguments (use insertManyWithOptArgs for multiple)
-let insertWithOptArgs (doc : obj) args table =
+let insertWithOptArgs<'T> (doc : 'T) args table =
     insert doc table |> InsertOptArg.apply args
 
 /// Insert multiple documents, providing optional arguments
-let insertManyWithOptArgs (docs : obj seq) args table =
+let insertManyWithOptArgs<'T> (docs : 'T seq) args table =
     insertMany docs table |> InsertOptArg.apply args
 
 /// Test whether a sequence is empty
@@ -372,7 +418,7 @@ let mergeJS js (expr : ReqlExpr) =
     expr.Merge (toJS js)
     
 /// Retrieve the nth element in a sequence
-let nth n (expr : ReqlExpr) =
+let nth (n : int) (expr : ReqlExpr) =
     expr.Nth n
 
 /// Order a sequence by a given field
@@ -452,27 +498,27 @@ let sync (table : Table) =
     table.Sync ()
 
 /// Return all documents in a table (may be further refined)
-let table tableName (db : Db) =
+let table (tableName : string) (db : Db) =
     db.Table tableName
 
 /// Return all documents in a table from the default database (may be further refined)
-let fromTable tableName =
+let fromTable (tableName : string) =
     r.Table tableName
 
 /// Create a table in the given database
-let tableCreate tableName (db : Db) =
+let tableCreate (tableName : string) (db : Db) =
     db.TableCreate tableName
 
 /// Create a table in the connection-default database
-let tableCreateInDefault tableName =
+let tableCreateInDefault (tableName : string) =
     r.TableCreate tableName
 
 /// Drop a table in the given database
-let tableDrop tableName (db : Db) =
+let tableDrop (tableName : string) (db : Db) =
     db.TableDrop tableName
 
 /// Drop a table from the connection-default database
-let tableDropFromDefault tableName =
+let tableDropFromDefault (tableName : string) =
     r.TableDrop tableName
 
 /// Get a list of tables for the given database
@@ -515,10 +561,8 @@ let without (columns : string seq) (expr : ReqlExpr) =
 let zip (expr : ReqlExpr) =
     expr.Zip ()
 
-// ~~ RETRY ~~
-
-open RethinkDb.Driver.Net
-
+// ~~ RETRY FUNCTIONS ~~
+    
 /// Retry, delaying for each the seconds provided (if required)
 let withRetry<'T> intervals f =
     Retry.withRetry<'T> f intervals
@@ -539,11 +583,11 @@ let withSyncRetry<'T> intervals f =
 let withRetryDefault<'T> f =
     Retry.withRetryDefault<'T> f
 
-/// Retry, delaying for each the seconds provided (if required)
+/// Retry failed commands with 200ms, 500ms, and 1 second delays
 let withAsyncRetryDefault<'T> f = fun conn ->
     withRetryDefault<'T> (asyncFuncToTask f) conn |> Async.AwaitTask
 
-/// Retry, delaying for each the seconds provided (if required)
+/// Retry failed commands with 200ms, 500ms, and 1 second delays
 let withSyncRetryDefault<'T> f =
     Retry.withRetrySyncDefault<'T> f
 
@@ -551,10 +595,10 @@ let withSyncRetryDefault<'T> f =
 let withRetryOnce<'T> f =
     Retry.withRetryOnce<'T> f
 
-/// Retry, delaying for each the seconds provided (if required)
+/// Retry failed commands one time with no delay
 let withAsyncRetryOnce<'T> f = fun conn ->
     withRetryOnce<'T> (asyncFuncToTask f) conn |> Async.AwaitTask
 
-/// Retry, delaying for each the seconds provided (if required)
+/// Retry failed commands one time with no delay
 let withSyncRetryOnce<'T> f =
     Retry.withRetrySyncOnce<'T> f

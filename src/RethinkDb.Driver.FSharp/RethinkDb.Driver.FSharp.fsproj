@@ -3,22 +3,28 @@
   <PropertyGroup>
     <TargetFrameworks>net6.0;netstandard2.0</TargetFrameworks>
     <Description>Idiomatic F# extensions on the official RethinkDB C# driver</Description>
-    <Authors>Daniel J. Summers</Authors>
+    <Authors>Daniel J. Summers,Bit Badger Solutions</Authors>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp</PackageProjectUrl>
-    <PackageIconUrl>https://github.com/danieljsummers/RethinkDb.Driver.FSharp/raw/main/pkg/icon.png</PackageIconUrl>
+    <RepositoryUrl>https://github.com/bit-badger/RethinkDb.Driver.FSharp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://bitbadger.solutions/open-source/rethinkdb-driver-fsharp/</PackageProjectUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
     <VersionPrefix>0.9.0</VersionPrefix>
-    <VersionSuffix>beta-01</VersionSuffix>
+    <VersionSuffix>beta-03</VersionSuffix>
+    <PackageReleaseNotes>
+      Retry logic now works with functions; added signature for function moduel and explicit type annotations to the
+      DSL builder
+    </PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="Retry.fs" />
     <Compile Include="OptArgs.fs" />
+    <Compile Include="Functions.fsi" />
     <Compile Include="Functions.fs" />
     <Compile Include="Builder.fs" />
     <Compile Include="Config.fs" />

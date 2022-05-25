@@ -23,7 +23,7 @@ open RethinkDb.Driver.FSharp
 
 let getPost postId conn =
     rethink<Post> {
-        fromTable "Post"
+        withTable "Post"
         get postId
         resultOption
         withRetryOptionDefault conn
@@ -31,7 +31,7 @@ let getPost postId conn =
 
 let updatePost post conn =
     rethink {
-        fromTable "Post"
+        withTable "Post"
         get post.id
         update post
         write
@@ -45,22 +45,24 @@ let updatePost post conn =
 ```fsharp
 open RethinkDb.Driver.FSharp.Functions
 
-// NOTE: this returns Task<Post>; checking for null/option is not handled
-//       as it is with the CE version
+// Remove the conn parameter and usage for point-free style
+
 let getPost postId conn =
     fromTable "Post"
     |> get postId
     |> runResult<Post>
-    |> withRetryDefault conn
+    |> asOption
+    |> withRetryDefault
+    |> withConn conn
 
-// NOTE: this returns Task<Result>; ignoring inline is not available as
-//       it is with the CE version
 let updatePost post conn =
     fromTable "Post"
     |> get post.id
     |> update post
     |> runWrite
-    |> withRetryDefault conn
+    |> ignoreResult
+    |> withRetryDefault
+    |> withConn conn
 ```
 
 ### Retry Logic
@@ -76,5 +78,10 @@ Many RethinkDB commands support optional arguments to tweak the behavior of that
     between 1 100 [ LowerBound Open; UpperBound Closed ]
 // ...
 ```
+---
+
+More information is available on the [project site][].
+
 
 [csharp-pkg]: https://www.nuget.org/packages/RethinkDb.Driver/
+[project site]: https://bitbadger.solutions/open-source/rethinkdb-driver-fsharp/

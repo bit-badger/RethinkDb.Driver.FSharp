@@ -28,7 +28,7 @@ module private ConnectionBuilder =
         | Database x     -> builder.Db       x
 
 
-/// RethinDB configuration
+/// RethinkDB configuration
 type DataConfig =
     { Parameters : DataConfigParameter list }
 

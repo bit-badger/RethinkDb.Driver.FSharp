@@ -1,25 +1,28 @@
 # RethinkDb.Driver.FSharp
 Idiomatic F# extensions for the C# RethinkDB driver
 
-[![Nuget (with prereleases)](https://img.shields.io/nuget/vpre/RethinkDb.Driver.FSharp)](https://www.nuget.org/packages/RethinkDb.Driver.FSharp/)
+[![Nuget (with prereleases)][pkg-img]][pkg-url]
 
 ## Using
 
-Install the [NuGet](https://www.nuget.org/packages/RethinkDb.Driver.FSharp/) package `RethinkDb.Driver.FSharp`. You will need to specify pre-release, as the package currently has a beta designation.
+Install the [NuGet][pkg-url] package `RethinkDb.Driver.FSharp`. You will need to specify pre-release, as the package currently has a beta designation.
 
 ## What It Provides
+
+The full documentation is on [the project site][project]; TL;DR below.
 
 ### A composable pipeline for creating ReQL statements
 
 ```fsharp
 open RethinkDb.Driver.FSharp.Functions
 
-/// string -> (IConnection -> Task<Post>)
+/// string -> (IConnection -> Task<Post option>)
 let fetchPost (postId : string) =
-    fromDb "Blog"
+    db "Blog"
     |> table "Post"
     |> get postId
     |> runResult<Post>
+    |> asOption
     |> withRetryDefault
 ```
 
@@ -86,4 +89,7 @@ license on this project's dependencies. Please see [the heading on the C# driver
 
 If you are using the project, feel free to file issues about your pain points; there is no substitute for real-world feedback!
 
+[pkg-img]: https://img.shields.io/nuget/vpre/RethinkDb.Driver.FSharp
+[pkg-url]: https://www.nuget.org/packages/RethinkDb.Driver.FSharp/
+[project]: https://bitbadger.solutions/open-source/rethinkdb-driver-fsharp/
 [license]: https://github.com/bchavez/RethinkDb.Driver#open-source-and-commercial-licensing
