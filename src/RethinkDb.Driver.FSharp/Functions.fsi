@@ -7,9 +7,6 @@ open RethinkDb.Driver
 open RethinkDb.Driver.Ast
 open RethinkDb.Driver.Net
 
-/// Get a cursor with the results of an expression
-val asyncCursor<'T> : ReqlExpr -> IConnection -> Async<Cursor<'T>>
-
 // ~~ WRITE, ALWAYS RETURNING A RESULT ~~
 
 /// Write a ReQL command with a cancellation token, always returning a result
@@ -80,6 +77,8 @@ val syncWriteWithOptArgs : RunOptArg list -> ReqlExpr -> (IConnection -> Model.R
 
 // ~~ RUNNING QUERIES AND MANIPULATING RESULTS ~~
 
+//    ~~ Full results ~~
+
 /// Run the ReQL command using a cancellation token, returning the result as the type specified
 val runResultWithCancel<'T> : CancellationToken -> ReqlExpr -> (IConnection -> Task<'T>)
 
@@ -121,6 +120,49 @@ val asSyncOption : (IConnection -> 'T) -> IConnection -> 'T option
 
 /// Ignore the result of a task-based execution
 val ignoreResult<'T> : (IConnection -> Task<'T>) -> IConnection -> Task<unit>
+
+//    ~~ Cursors / Partial results ~~
+
+/// Run the ReQL command using a cancellation token, returning a cursor for the type specified
+val runCursorWithCancel<'T> : CancellationToken -> ReqlExpr -> (IConnection -> Task<Cursor<'T>>)
+
+/// Run the ReQL command using optional arguments and a cancellation token, returning a cursor for the type specified
+val runCursorWithOptArgsAndCancel<'T> :
+        RunOptArg list -> CancellationToken -> ReqlExpr -> (IConnection -> Task<Cursor<'T>>)
+
+/// Run the ReQL command, returning a cursor for the type specified
+val runCursor<'T> : ReqlExpr -> (IConnection -> Task<Cursor<'T>>)
+
+/// Run the ReQL command using optional arguments, returning a cursor for the type specified
+val runCursorWithOptArgs<'T> : RunOptArg list -> ReqlExpr -> (IConnection -> Task<Cursor<'T>>)
+
+/// Run the ReQL command, returning a cursor for type specified
+val asyncCursor<'T> : ReqlExpr -> (IConnection -> Async<Cursor<'T>>)
+
+/// Run the ReQL command using optional arguments, returning a cursor for the type specified
+val asyncCursorWithOptArgs<'T> : RunOptArg list -> ReqlExpr -> (IConnection -> Async<Cursor<'T>>)
+
+/// Run the ReQL command using a cancellation token, returning a cursor for the type specified
+val asyncCursorWithCancel<'T> : CancellationToken -> ReqlExpr -> (IConnection -> Async<Cursor<'T>>)
+
+/// Run the ReQL command using optional arguments and a cancellation token, returning a cursor for the type specified
+val asyncCursorWithOptArgsAndCancel<'T> :
+        RunOptArg list -> CancellationToken -> ReqlExpr -> (IConnection -> Async<Cursor<'T>>)
+
+/// Run the ReQL command, returning a cursor for the type specified
+val syncCursor<'T> : ReqlExpr -> (IConnection -> Cursor<'T>)
+
+/// Run the ReQL command using optional arguments, returning a cursor for the type specified
+val syncCursorWithOptArgs<'T> : RunOptArg list -> ReqlExpr -> (IConnection -> Cursor<'T>)
+
+/// Convert a cursor to a list of items
+val toList<'T> : (IConnection -> Task<Cursor<'T>>) -> IConnection -> Task<'T list>
+
+/// Convert a cursor to a list of items
+val toListAsync<'T> : (IConnection -> Async<Cursor<'T>>) -> IConnection -> Async<'T list>
+
+/// Convert a cursor to a list of items
+val toListSync<'T> : (IConnection -> Cursor<'T>) -> IConnection -> 'T list
 
 /// Apply a connection to the query pipeline (typically the final step)
 val withConn<'T> : IConnection -> (IConnection -> 'T) -> 'T

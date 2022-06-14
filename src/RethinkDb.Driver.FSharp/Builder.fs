@@ -473,6 +473,43 @@ type RethinkBuilder<'T> () =
                               conn : IConnection) =
         this.ResultOption (expr, opts, cancelToken) conn
     
+    /// Execute the query, returning a cursor for the type specified using the given cancellation token
+    [<CustomOperation "resultCursor">]
+    member _.ResultCursor (expr : ReqlExpr, cancelToken : CancellationToken) = runCursorWithCancel<'T> cancelToken expr
+    
+    /// Execute the query, returning a cursor for the type specified using the given cancellation token
+    [<CustomOperation "resultCursor">]
+    member this.ResultCursor (expr : ReqlExpr, cancelToken : CancellationToken, conn : IConnection) =
+        this.ResultCursor (expr, cancelToken) conn
+    
+    /// Execute the query, returning a cursor for the type specified
+    [<CustomOperation "resultCursor">]
+    member _.ResultCursor (expr : ReqlExpr) = runCursor<'T> expr
+    
+    /// Execute the query, returning a cursor for the type specified
+    [<CustomOperation "resultCursor">]
+    member this.ResultCursor (expr : ReqlExpr, conn : IConnection) = this.ResultCursor expr conn
+    
+    /// Execute the query, returning a cursor for the type specified, using optional arguments
+    [<CustomOperation "resultCursor">]
+    member _.ResultCursor (expr : ReqlExpr, args : RunOptArg list) = runCursorWithOptArgs<'T> args expr 
+    
+    /// Execute the query, returning a cursor for the type specified
+    [<CustomOperation "resultCursor">]
+    member this.ResultCursor (expr : ReqlExpr, args : RunOptArg list, conn : IConnection) =
+        this.ResultCursor (expr, args) conn
+    
+    /// Execute the query, returning a cursor for the type specified, using optional arguments and a cancellation token
+    [<CustomOperation "resultCursor">]
+    member _.ResultCursor (expr : ReqlExpr, args : RunOptArg list, cancelToken : CancellationToken) =
+        runCursorWithOptArgsAndCancel<'T> args cancelToken expr 
+    
+    /// Execute the query, returning a cursor for the type specified, using optional arguments and a cancellation token
+    [<CustomOperation "resultCursor">]
+    member this.ResultCursor (expr : ReqlExpr, args : RunOptArg list, cancelToken : CancellationToken,
+                              conn : IConnection) =
+        this.ResultCursor (expr, args, cancelToken) conn 
+    
     /// Execute the query, returning the result of the type specified using the given cancellation token
     [<CustomOperation "asyncResult">]
     member _.AsyncResult (expr : ReqlExpr, cancelToken : CancellationToken) = asyncResultWithCancel<'T> cancelToken expr
@@ -494,7 +531,7 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "asyncResult">]
     member _.AsyncResult (expr : ReqlExpr, args : RunOptArg list) = asyncResultWithOptArgs<'T> args expr 
     
-    /// Execute the query, returning the result of the type specified
+    /// Execute the query, returning the result of the type specified, using optional arguments
     [<CustomOperation "asyncResult">]
     member this.AsyncResult (expr : ReqlExpr, args : RunOptArg list, conn : IConnection) =
         this.AsyncResult (expr, args) conn
@@ -554,6 +591,43 @@ type RethinkBuilder<'T> () =
                              conn : IConnection) =
         this.AsyncOption (expr, opts, cancelToken) conn
     
+    /// Execute the query, returning a cursor for the type specified using the given cancellation token
+    [<CustomOperation "asyncCursor">]
+    member _.AsyncCursor (expr : ReqlExpr, cancelToken : CancellationToken) = asyncCursorWithCancel<'T> cancelToken expr
+    
+    /// Execute the query, returning a cursor for the type specified using the given cancellation token
+    [<CustomOperation "asyncCursor">]
+    member this.AsyncCursor (expr : ReqlExpr, cancelToken : CancellationToken, conn : IConnection) =
+        this.AsyncCursor (expr, cancelToken) conn
+    
+    /// Execute the query, returning a cursor for the type specified
+    [<CustomOperation "asyncCursor">]
+    member _.AsyncCursor (expr : ReqlExpr) = asyncCursor<'T> expr
+    
+    /// Execute the query, returning a cursor for the type specified
+    [<CustomOperation "asyncCursor">]
+    member this.AsyncCursor (expr : ReqlExpr, conn : IConnection) = this.AsyncCursor expr conn
+    
+    /// Execute the query, returning a cursor for the type specified, using optional arguments
+    [<CustomOperation "asyncCursor">]
+    member _.AsyncCursor (expr : ReqlExpr, args : RunOptArg list) = asyncCursorWithOptArgs<'T> args expr 
+    
+    /// Execute the query, returning a cursor for the type specified, using optional arguments
+    [<CustomOperation "asyncCursor">]
+    member this.AsyncCursor (expr : ReqlExpr, args : RunOptArg list, conn : IConnection) =
+        this.AsyncCursor (expr, args) conn
+    
+    /// Execute the query, returning a cursor for the type specified, using optional arguments and a cancellation token
+    [<CustomOperation "asyncCursor">]
+    member _.AsyncCursor (expr : ReqlExpr, args : RunOptArg list, cancelToken : CancellationToken) =
+        asyncCursorWithOptArgsAndCancel<'T> args cancelToken expr 
+    
+    /// Execute the query, returning a cursor for the type specified, using optional arguments and a cancellation token
+    [<CustomOperation "asyncCursor">]
+    member this.AsyncCursor (expr : ReqlExpr, args : RunOptArg list, cancelToken : CancellationToken,
+                             conn : IConnection) =
+        this.AsyncCursor (expr, args, cancelToken) conn 
+    
     /// Execute the query synchronously, returning the result of the type specified
     [<CustomOperation "syncResult">]
     member _.SyncResult (expr : ReqlExpr) = syncResult<'T> expr
@@ -566,7 +640,7 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "syncResult">]
     member _.SyncResult (expr : ReqlExpr, args : RunOptArg list) = syncResultWithOptArgs<'T> args expr 
     
-    /// Execute the query synchronously, returning the result of the type specified
+    /// Execute the query synchronously, returning the result of the type specified, using optional arguments
     [<CustomOperation "syncResult">]
     member this.SyncResult (expr : ReqlExpr, args : RunOptArg list, conn : IConnection) =
         this.SyncResult (expr, args) conn
@@ -589,6 +663,23 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "syncOption">]
     member this.SyncOption (expr : ReqlExpr, opts : RunOptArg list, conn : IConnection) =
         this.SyncOption (expr, opts) conn
+    
+    /// Execute the query synchronously, returning a cursor for the type specified
+    [<CustomOperation "syncCursor">]
+    member _.SyncCursor (expr : ReqlExpr) = syncCursor<'T> expr
+    
+    /// Execute the query synchronously, returning a cursor for the type specified
+    [<CustomOperation "syncCursor">]
+    member this.SyncCursor (expr : ReqlExpr, conn : IConnection) = this.SyncCursor expr conn
+    
+    /// Execute the query synchronously, returning a cursor for the type specified, using optional arguments
+    [<CustomOperation "syncCursor">]
+    member _.SyncCursor (expr : ReqlExpr, args : RunOptArg list) = syncCursorWithOptArgs<'T> args expr 
+    
+    /// Execute the query synchronously, returning a cursor for the type specified, using optional arguments
+    [<CustomOperation "syncCursor">]
+    member this.SyncCursor (expr : ReqlExpr, args : RunOptArg list, conn : IConnection) =
+        this.SyncCursor (expr, args) conn
     
     /// Perform a write operation
     [<CustomOperation "write">]
@@ -798,6 +889,30 @@ type RethinkBuilder<'T> () =
     /// Ignore the result of a synchronous operation
     [<CustomOperation "ignoreSync">]
     member this.IgnoreSync (f : IConnection -> 'T, conn) = this.IgnoreSync f conn
+
+    /// Convert the items in a cursor to a list
+    [<CustomOperation "toList">]
+    member _.ToList (f : IConnection -> Task<Cursor<'T>>) = toList<'T> f
+
+    /// Convert the items in a cursor to a list
+    [<CustomOperation "toList">]
+    member this.ToList (f : IConnection -> Task<Cursor<'T>>, conn) = this.ToList f conn
+
+    /// Convert the items in a cursor to a list
+    [<CustomOperation "toListAsync">]
+    member _.ToListAsync (f : IConnection -> Async<Cursor<'T>>) = toListAsync f
+
+    /// Convert the items in a cursor to a list
+    [<CustomOperation "toListAsync">]
+    member this.ToListAsync (f : IConnection -> Async<Cursor<'T>>, conn) = this.ToListAsync f conn
+
+    /// Convert the items in a cursor to a list
+    [<CustomOperation "toListSync">]
+    member _.ToListSync (f : IConnection -> Cursor<'T>) = toListSync f
+
+    /// Convert the items in a cursor to a list
+    [<CustomOperation "toListSync">]
+    member this.ToListSync (f : IConnection -> Cursor<'T>, conn) = this.ToListSync f conn
 
     // Reconnection
 

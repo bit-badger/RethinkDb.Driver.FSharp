@@ -2,6 +2,7 @@
 module RethinkDb.Driver.FSharp.Functions
 
 open System.Threading
+open System.Threading.Tasks
 open RethinkDb.Driver
 open RethinkDb.Driver.Ast
 open RethinkDb.Driver.Net
@@ -13,13 +14,6 @@ module private Helpers =
 
     /// Create a Javascript object from a string (used mostly for type inference)
     let toJS (js : string) = Javascript js
-
-// ~~ EXECUTION ~~
-
-/// Get a cursor with the results of an expression
-let asyncCursor<'T> (expr : ReqlExpr) conn =
-    expr.RunCursorAsync<'T> conn
-    |> Async.AwaitTask
 
 // ~~ WRITES ~~
     
@@ -110,13 +104,14 @@ let syncWriteWithOptArgs args expr = fun conn ->
     asyncWriteWithOptArgs args expr conn |> Async.RunSynchronously
 
 // ~~ QUERY RESULTS AND MANIPULATION ~~
-    
+
+//    ~~ Full results (atom / sequence) ~~
+
 /// Run the ReQL command using a cancellation token, returning the result as the type specified
 let runResultWithCancel<'T> cancelToken (expr : ReqlExpr) = fun conn ->
     expr.RunResultAsync<'T> (conn, cancelToken)
 
-/// Run the ReQL command using optional arguments and a cancellation token, returning the result as the type
-/// specified
+/// Run the ReQL command using optional arguments and a cancellation token, returning the result as the type specified
 let runResultWithOptArgsAndCancel<'T> args cancelToken (expr : ReqlExpr) = fun conn ->
     expr.RunResultAsync<'T> (conn, RunOptArg.create args, cancelToken)
 
@@ -138,8 +133,7 @@ let asyncResultWithOptArgs<'T> args expr = fun conn ->
 let asyncResultWithCancel<'T> cancelToken expr = fun conn ->
     runResultWithCancel<'T> cancelToken expr conn |> Async.AwaitTask
 
-/// Run the ReQL command using optional arguments and a cancellation token, returning the result as the type
-/// specified
+/// Run the ReQL command using optional arguments and a cancellation token, returning the result as the type specified
 let asyncResultWithOptArgsAndCancel<'T> args cancelToken expr = fun conn ->
     runResultWithOptArgsAndCancel<'T> args cancelToken expr conn |> Async.AwaitTask
 
@@ -175,6 +169,75 @@ let ignoreResult<'T> (f : IConnection -> Tasks.Task<'T>) conn = task {
     let! _ = (f conn).ConfigureAwait false
     ()
 }
+
+//    ~~ Cursors / partial results (sequence / partial) ~~
+
+/// Run the ReQL command using a cancellation token, returning a cursor for the type specified
+let runCursorWithCancel<'T> cancelToken (expr : ReqlExpr) = fun conn ->
+    expr.RunCursorAsync<'T> (conn, cancelToken)
+
+/// Run the ReQL command using optional arguments and a cancellation token, returning a cursor for the type specified
+let runCursorWithOptArgsAndCancel<'T> args cancelToken (expr : ReqlExpr) = fun conn ->
+    expr.RunCursorAsync<'T> (conn, RunOptArg.create args, cancelToken)
+
+/// Run the ReQL command, returning a cursor for the type specified
+let runCursor<'T> expr = runCursorWithCancel<'T> CancellationToken.None expr
+
+/// Run the ReQL command using optional arguments, returning a cursor for the type specified
+let runCursorWithOptArgs<'T> args expr = runCursorWithOptArgsAndCancel<'T> args CancellationToken.None expr
+
+/// Run the ReQL command, returning a cursor for the type specified
+let asyncCursor<'T> expr = fun conn ->
+    runCursor<'T> expr conn |> Async.AwaitTask
+
+/// Run the ReQL command using optional arguments, returning a cursor for the type specified
+let asyncCursorWithOptArgs<'T> args expr = fun conn ->
+    runCursorWithOptArgs<'T> args expr conn |> Async.AwaitTask
+
+/// Run the ReQL command using a cancellation token, returning a cursor for the type specified
+let asyncCursorWithCancel<'T> cancelToken expr = fun conn ->
+    runCursorWithCancel<'T> cancelToken expr conn |> Async.AwaitTask
+
+/// Run the ReQL command using optional arguments and a cancellation token, returning a cursor for the type specified
+let asyncCursorWithOptArgsAndCancel<'T> args cancelToken expr = fun conn ->
+    runCursorWithOptArgsAndCancel<'T> args cancelToken expr conn |> Async.AwaitTask
+
+/// Run the ReQL command, returning a cursor for the type specified
+let syncCursor<'T> expr = fun conn ->
+    asyncCursor<'T> expr conn |> Async.RunSynchronously
+
+/// Run the ReQL command using optional arguments, returning a cursor for the type specified
+let syncCursorWithOptArgs<'T> args expr = fun conn ->
+    asyncCursorWithOptArgs<'T> args expr conn |> Async.RunSynchronously
+
+/// Convert a cursor to a list (once the cursor has been obtained)
+let cursorToList<'T> (cursor : Cursor<'T>) = backgroundTask {
+    let! hasNext = cursor.MoveNextAsync ()
+    let mutable hasData = hasNext
+    let mutable items = []
+    while hasData do
+        items <- cursor.Current :: items
+        let! hasNext = cursor.MoveNextAsync ()
+        hasData <- hasNext
+    return items
+}
+ 
+/// Convert a cursor to a list of items
+let toList<'T> (f : IConnection -> Task<Cursor<'T>>) = fun conn -> backgroundTask {
+    use! cursor = f conn
+    return! cursorToList cursor
+}
+
+/// Convert a cursor to a list of items
+let toListAsync<'T> (f : IConnection -> Async<Cursor<'T>>) = fun conn -> async {
+    use! cursor = f conn
+    return! cursorToList<'T> cursor |> Async.AwaitTask
+}
+
+/// Convert a cursor to a list of items
+let toListSync<'T> (f : IConnection -> Cursor<'T>) = fun conn ->
+    use cursor = f conn
+    cursorToList cursor |> Async.AwaitTask |> Async.RunSynchronously
 
 /// Apply a connection to the query pipeline (typically the final step)
 let withConn<'T> conn (f : IConnection -> 'T) = f conn

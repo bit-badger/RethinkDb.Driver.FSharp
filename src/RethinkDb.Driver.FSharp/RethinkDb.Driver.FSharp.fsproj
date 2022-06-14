@@ -14,10 +14,9 @@
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
     <VersionPrefix>0.9.0</VersionPrefix>
-    <VersionSuffix>beta-03</VersionSuffix>
+    <VersionSuffix>beta-04</VersionSuffix>
     <PackageReleaseNotes>
-      Retry logic now works with functions; added signature for function moduel and explicit type annotations to the
-      DSL builder
+      Add cursor / toList functions and DSL operations
     </PackageReleaseNotes>
   </PropertyGroup>
 
