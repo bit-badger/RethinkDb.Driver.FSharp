@@ -14,9 +14,9 @@
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
     <VersionPrefix>0.9.0</VersionPrefix>
-    <VersionSuffix>beta-04</VersionSuffix>
+    <VersionSuffix>beta-05</VersionSuffix>
     <PackageReleaseNotes>
-      Add cursor / toList functions and DSL operations
+      Add retry for cursor DSL operations
     </PackageReleaseNotes>
   </PropertyGroup>
 

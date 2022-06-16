@@ -935,6 +935,16 @@ type RethinkBuilder<'T> () =
         this.WithRetryOption (f, retries) conn
    
     /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withRetryCursor">]
+    member _.WithRetryCursor (f : IConnection -> Task<Cursor<'T>>, retries : float seq) =
+        withRetry<Cursor<'T>> retries f
+
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withRetryCursor">]
+    member this.WithRetryCursor (f : IConnection -> Task<Cursor<'T>>, retries : float seq, conn : IConnection) =
+        this.WithRetryCursor (f, retries) conn
+   
+    /// Retries a variable number of times, waiting each time for the seconds specified
     [<CustomOperation "withAsyncRetry">]
     member _.WithAsyncRetry (f : IConnection -> Async<'T>, retries : float seq) = withAsyncRetry<'T> retries f
 
@@ -952,6 +962,16 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "withAsyncRetryOption">]
     member this.WithAsyncRetryOption (f : IConnection -> Async<'T option>, retries : float seq, conn : IConnection) =
         this.WithAsyncRetryOption (f, retries) conn
+   
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withAsyncRetryCursor">]
+    member _.WithAsyncRetryCursor (f : IConnection -> Async<Cursor<'T>>, retries : float seq) =
+        withAsyncRetry<Cursor<'T>> retries f
+
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withAsyncRetryCursor">]
+    member this.WithAsyncRetryCursor (f : IConnection -> Async<Cursor<'T>>, retries : float seq, conn : IConnection) =
+        this.WithAsyncRetryCursor (f, retries) conn
    
     /// Retries a variable number of times, waiting each time for the seconds specified
     [<CustomOperation "withSyncRetry">]
@@ -972,6 +992,16 @@ type RethinkBuilder<'T> () =
     member this.WithSyncRetryOption (f : IConnection -> 'T option, retries : float seq, conn : IConnection) =
         this.WithSyncRetryOption (f, retries) conn
    
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withSyncRetryCursor">]
+    member _.WithSyncRetryCursor (f : IConnection -> Cursor<'T>, retries : float seq) =
+        withSyncRetry<Cursor<'T>> retries f
+
+    /// Retries a variable number of times, waiting each time for the seconds specified
+    [<CustomOperation "withSyncRetryCursor">]
+    member this.WithSyncRetryCursor (f : IConnection -> Cursor<'T>, retries : float seq, conn : IConnection) =
+        this.WithSyncRetryCursor (f, retries) conn
+   
     /// Retries at 200ms, 500ms, and 1s
     [<CustomOperation "withRetryDefault">]
     member _.WithRetryDefault (f : IConnection -> Task<'T>) = withRetryDefault<'T> f
@@ -988,6 +1018,15 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "withRetryOptionDefault">]
     member this.WithRetryOptionDefault (f : IConnection -> Task<'T option>, conn : IConnection) =
         this.WithRetryOptionDefault f conn
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withRetryCursorDefault">]
+    member _.WithRetryCursorDefault (f : IConnection -> Task<Cursor<'T>>) = withRetryDefault<Cursor<'T>> f
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withRetryCursorDefault">]
+    member this.WithRetryCursorDefault (f : IConnection -> Task<Cursor<'T>>, conn : IConnection) =
+        this.WithRetryCursorDefault f conn
 
     /// Retries at 200ms, 500ms, and 1s
     [<CustomOperation "withAsyncRetryDefault">]
@@ -1008,6 +1047,15 @@ type RethinkBuilder<'T> () =
         this.WithAsyncRetryOptionDefault f conn
 
     /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withAsyncRetryCursorDefault">]
+    member _.WithAsyncRetryCursorDefault (f : IConnection -> Async<Cursor<'T>>) = withAsyncRetryDefault<Cursor<'T>> f
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withAsyncRetryCursorDefault">]
+    member this.WithAsyncRetryCursorDefault (f : IConnection -> Async<Cursor<'T>>, conn : IConnection) =
+        this.WithAsyncRetryCursorDefault f conn
+
+    /// Retries at 200ms, 500ms, and 1s
     [<CustomOperation "withSyncRetryDefault">]
     member _.WithSyncRetryDefault (f : IConnection -> 'T) = withSyncRetryDefault<'T> f
 
@@ -1023,6 +1071,15 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "withSyncRetryOptionDefault">]
     member this.WithSyncRetryOptionDefault (f : IConnection -> 'T option, conn : IConnection) =
         this.WithSyncRetryOptionDefault f conn
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withSyncRetryCursorDefault">]
+    member _.WithSyncRetryCursorDefault (f : IConnection -> Cursor<'T>) = withSyncRetryDefault<Cursor<'T>> f
+
+    /// Retries at 200ms, 500ms, and 1s
+    [<CustomOperation "withSyncRetryCursorDefault">]
+    member this.WithSyncRetryCursorDefault (f : IConnection -> Cursor<'T>, conn : IConnection) =
+        this.WithSyncRetryCursorDefault f conn
 
     /// Retries once immediately
     [<CustomOperation "withRetryOnce">]
@@ -1042,6 +1099,15 @@ type RethinkBuilder<'T> () =
         this.WithRetryOptionOnce f conn
 
     /// Retries once immediately
+    [<CustomOperation "withRetryCursorOnce">]
+    member _.WithRetryCursorOnce (f : IConnection -> Task<Cursor<'T>>) = withRetryOnce<Cursor<'T>> f
+
+    /// Retries once immediately
+    [<CustomOperation "withRetryCursorOnce">]
+    member this.WithRetryCursorOnce (f : IConnection -> Task<Cursor<'T>>, conn : IConnection) =
+        this.WithRetryCursorOnce f conn
+
+    /// Retries once immediately
     [<CustomOperation "withAsyncRetryOnce">]
     member _.WithAsyncRetryOnce (f : IConnection -> Async<'T>) = withAsyncRetryOnce<'T> f
 
@@ -1059,6 +1125,15 @@ type RethinkBuilder<'T> () =
         this.WithAsyncRetryOptionOnce f conn
 
     /// Retries once immediately
+    [<CustomOperation "withAsyncRetryCursorOnce">]
+    member _.WithAsyncRetryCursorOnce (f : IConnection -> Async<Cursor<'T>>) = withAsyncRetryOnce<Cursor<'T>> f
+
+    /// Retries once immediately
+    [<CustomOperation "withAsyncRetryCursorOnce">]
+    member this.WithAsyncRetryCursorOnce (f : IConnection -> Async<Cursor<'T>>, conn : IConnection) =
+        this.WithAsyncRetryCursorOnce f conn
+
+    /// Retries once immediately
     [<CustomOperation "withSyncRetryOnce">]
     member _.WithSyncRetryOnce (f : IConnection -> 'T) = withSyncRetryOnce<'T> f
 
@@ -1074,6 +1149,15 @@ type RethinkBuilder<'T> () =
     [<CustomOperation "withSyncRetryOptionOnce">]
     member this.WithSyncRetryOptionOnce (f : IConnection -> 'T option, conn : IConnection) =
         this.WithSyncRetryOptionOnce f conn
+
+    /// Retries once immediately
+    [<CustomOperation "withSyncRetryCursorOnce">]
+    member _.WithSyncRetryCursorOnce (f : IConnection -> Cursor<'T>) = withSyncRetryOnce<Cursor<'T>> f
+
+    /// Retries once immediately
+    [<CustomOperation "withSyncRetryCursorOnce">]
+    member this.WithSyncRetryCursorOnce (f : IConnection -> Cursor<'T>, conn : IConnection) =
+        this.WithSyncRetryCursorOnce f conn
 
 
 /// RethinkDB computation expression
