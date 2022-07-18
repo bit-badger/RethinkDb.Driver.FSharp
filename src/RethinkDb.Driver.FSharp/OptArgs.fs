@@ -299,6 +299,57 @@ module RunOptArg =
         args
 
 
+/// Definition of server tag/replica count
+type ReplicaTag =
+    /// A tagged server replica, along with the number of replicas per shard for that server 
+    | ReplicaTag of string * int
+
+/// Definition of replicas per shard when creating a table
+type ReplicaSpec =
+    /// Create this number of replicas per shard
+    | Number of int
+    /// Create the replicas across tagged servers, using the specified tag as the primary server
+    | WithTags of string * ReplicaTag list
+
+/// Optional arguments for creating tables
+type TableCreateOptArg =
+    /// The name of the primary key field (default is "id")
+    | PrimaryKey of string
+    /// The durability of the command
+    | Durability of Durability
+    /// The number of shards to create (1 to 64)
+    | Shards of int
+    /// The replicas per shard for this table
+    | Replicas of ReplicaSpec
+
+/// Functions to support `tableCreate` optional arguments
+module TableCreateOptArg =
+    
+    /// Apply a list of optional arguments to a tableCreate statement
+    let apply opts (tc : TableCreate) =
+        opts
+        |> List.fold (fun (tc : TableCreate) arg ->
+            match arg with
+            | PrimaryKey  pk -> tc.OptArg ("primary_key", pk)
+            | Durability dur -> tc.OptArg dur.reql
+            | Shards      sh -> tc.OptArg ("shards", sh)
+            | Replicas   rep ->
+                match rep with
+                | Number count -> tc.OptArg ("replicas", count)
+                | WithTags (primary, all) ->
+                    let (ReplicaTag (firstTag, firstCount)) = List.head all
+                    let replica =
+                        all
+                        |> List.skip 1
+                        |> List.fold (fun (h : Model.MapObject) arg ->
+                            let (ReplicaTag (tag, count)) = arg
+                            h.With (tag, count))
+                            (RethinkDB.R.HashMap (firstTag, firstCount))
+                    tc.OptArg("replicas", replica).OptArg ("primary_replica_tag", primary)
+            )
+            tc
+
+    
 /// Optional arguments for the `update` statement
 type UpdateOptArg =
     /// The durability of the command

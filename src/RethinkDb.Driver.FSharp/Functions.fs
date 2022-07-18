@@ -576,6 +576,14 @@ let tableCreate (tableName : string) (db : Db) =
 let tableCreateInDefault (tableName : string) =
     r.TableCreate tableName
 
+/// Create a table in the connection-default database, providing optional arguments
+let tableCreateInDefaultWithOptArgs (tableName : string) args =
+    r.TableCreate tableName |> TableCreateOptArg.apply args
+
+/// Create a table in the given database, providing optional arguments
+let tableCreateWithOptArgs (tableName : string) args (db : Db) =
+    db.TableCreate tableName |> TableCreateOptArg.apply args
+
 /// Drop a table in the given database
 let tableDrop (tableName : string) (db : Db) =
     db.TableDrop tableName

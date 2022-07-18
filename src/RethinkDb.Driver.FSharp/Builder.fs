@@ -80,6 +80,13 @@ type RethinkBuilder<'T> () =
         | Some dbName, tblName -> this.Db (r, dbName) |> tableCreate tblName
         | None, _ -> tableCreateInDefault tableName
     
+    /// Create a table, providing optional arguments (of form "dbName.tableName"; if no db name, uses default database)
+    [<CustomOperation "tableCreate">]
+    member this.TableCreate (r : RethinkDB, tableName : string, args : TableCreateOptArg list) =
+        match dbAndTable tableName with
+        | Some dbName, tblName -> this.Db (r, dbName) |> tableCreateWithOptArgs tblName args
+        | None, _ -> tableCreateInDefaultWithOptArgs tableName args
+    
     /// Drop a table (of form "dbName.tableName"; if no db name, uses default database)
     [<CustomOperation "tableDrop">]
     member this.TableDrop (r : RethinkDB, tableName : string) =

@@ -418,6 +418,12 @@ val tableCreate : string -> Db -> TableCreate
 /// Create a table in the connection-default database
 val tableCreateInDefault : string -> TableCreate
 
+/// Create a table in the connection-default database, providing optional arguments
+val tableCreateInDefaultWithOptArgs : string -> TableCreateOptArg list -> TableCreate
+
+/// Create a table in the given database, providing optional arguments
+val tableCreateWithOptArgs : string -> TableCreateOptArg list -> Db -> TableCreate
+
 /// Drop a table in the given database
 val tableDrop : string -> Db -> TableDrop
 

@@ -14,9 +14,9 @@
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
     <VersionPrefix>0.9.0</VersionPrefix>
-    <VersionSuffix>beta-05</VersionSuffix>
+    <VersionSuffix>beta-06</VersionSuffix>
     <PackageReleaseNotes>
-      Add retry for cursor DSL operations
+      Add optional arguments for tableCreate
     </PackageReleaseNotes>
   </PropertyGroup>
 
