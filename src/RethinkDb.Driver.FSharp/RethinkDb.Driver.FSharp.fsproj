@@ -14,9 +14,9 @@
     <Copyright>See LICENSE</Copyright>
     <PackageTags>RethinkDB document F#</PackageTags>
     <VersionPrefix>0.9.0</VersionPrefix>
-    <VersionSuffix>beta-06</VersionSuffix>
+    <VersionSuffix>beta-07</VersionSuffix>
     <PackageReleaseNotes>
-      Add optional arguments for tableCreate
+      Add URI config option and logging CreateConnection overloads
     </PackageReleaseNotes>
   </PropertyGroup>
 

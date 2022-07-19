@@ -2,6 +2,7 @@ namespace RethinkDb.Driver.FSharp
 
 open System
 open Microsoft.Extensions.Configuration
+open Microsoft.Extensions.Logging
 open Newtonsoft.Json.Linq
 open RethinkDb.Driver
 open RethinkDb.Driver.Net
@@ -36,18 +37,31 @@ type DataConfig =
     /// An empty configuration
     static member empty =
         { Parameters = [] }
-
+    
+    /// Build the connection from the given parameters
+    member private this.BuildConnection () =
+        this.Parameters
+        |> Seq.fold ConnectionBuilder.build (RethinkDB.R.Connection ())
+        
     /// Create a RethinkDB connection
     member this.CreateConnection () : IConnection =
-        this.Parameters
-        |> Seq.fold ConnectionBuilder.build (RethinkDB.R.Connection ())
-        |> function builder -> builder.Connect ()
+        (this.BuildConnection ()).Connect ()
 
+    /// Create a RethinkDB connection, logging the connection settings
+    member this.CreateConnection (log : ILogger) : IConnection =
+        let builder = this.BuildConnection ()
+        if not (isNull log) then log.LogInformation $"Connecting to {this.EffectiveUri}"
+        builder.Connect ()
+    
     /// Create a RethinkDB connection
     member this.CreateConnectionAsync () : Task<Connection> =
-        this.Parameters
-        |> Seq.fold ConnectionBuilder.build (RethinkDB.R.Connection ())
-        |> function builder -> builder.ConnectAsync ()
+        (this.BuildConnection ()).ConnectAsync ()
+    
+    /// Create a RethinkDB connection, logging the connection settings
+    member this.CreateConnectionAsync (log : ILogger) : Task<Connection> =
+        let builder = this.BuildConnection ()
+        if not (isNull log) then log.LogInformation $"Connecting to {this.EffectiveUri}"
+        builder.ConnectAsync ()
     
     /// The effective hostname
     member this.Hostname =
@@ -83,7 +97,7 @@ type DataConfig =
                 match this.Parameters |> List.tryPick (fun x -> match x with AuthKey _ -> Some x | _ -> None) with
                 | Some (AuthKey _) -> "****key****@"
                 | _ -> ()
-            $"{this.Hostname}:{this.Port}/{this.Database}/{this.Timeout}"
+            $"{this.Hostname}:{this.Port}/{this.Database}?timeout={this.Timeout}"
         }
         |> String.concat ""
     
@@ -134,23 +148,23 @@ type DataConfig =
     
     /// Parse settings from a URI
     ///
-    /// rethinkdb://user:password@host:port/database/timeout
+    /// rethinkdb://user:password@host:port/database?timeout=##
     ///   OR
-    /// rethinkdb://authkey@host:port/database/timeout
+    /// rethinkdb://authkey@host:port/database?timeout=##
     ///
-    /// host is required, database is required if timeout is specified
+    /// Scheme and host are required; all other settings optional
     static member FromUri (uri : string) =
         let it = Uri uri
-        if it.Scheme <> "rethinkdb" then invalidArg "scheme" $"""URI scheme must be "rethinkdb" (was {it.Scheme})"""
+        if it.Scheme <> "rethinkdb" then invalidArg "Scheme" $"""URI scheme must be "rethinkdb" (was {it.Scheme})"""
         { Parameters =
             [   Hostname it.Host
                 if it.Port <> -1 then Port it.Port
                 if it.UserInfo <> "" then
-                    if it.UserInfo.Contains ':' then
+                    if it.UserInfo.Contains ":" then
                         let parts = it.UserInfo.Split ':' |> Array.truncate 2
                         User (parts[0], parts[1])
                     else AuthKey it.UserInfo
                 if it.Segments.Length > 1 then Database it.Segments[1]
-                if it.Segments.Length > 2 then Timeout (int it.Segments[2])
+                if it.Query.Contains "?timeout=" then Timeout (int it.Query[9..])
             ]
         }
