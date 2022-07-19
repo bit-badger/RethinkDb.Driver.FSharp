@@ -41,13 +41,15 @@ let fetchPost (postId : string) =
     }
 ```
 
-### A standard way to translate JSON into a strongly-typed configuration
+### A standard way to translate JSON or a URI into a strongly-typed configuration
 
 ```fsharp
 /// type: DataConfig
 let config = DataConfig.fromJsonFile "data-config.json"
 // OR
 let config = DataConfig.fromConfiguration (config.GetSection "RethinkDB")
+// OR
+let config = DataConfig.fromUri (config.GetConnectionString "RethinkDB")
 
 /// type: IConnection
 let conn = config.Connect ()

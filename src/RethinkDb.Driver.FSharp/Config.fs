@@ -1,5 +1,6 @@
 namespace RethinkDb.Driver.FSharp
 
+open System
 open Microsoft.Extensions.Configuration
 open Newtonsoft.Json.Linq
 open RethinkDb.Driver
@@ -72,6 +73,20 @@ type DataConfig =
         | Some (Database x) -> x
         | _ -> RethinkDBConstants.DefaultDbName
     
+    /// The effective configuration URI (excludes password / auth key)
+    member this.EffectiveUri =
+        seq {
+            "rethinkdb://"
+            match this.Parameters |> List.tryPick (fun x -> match x with User _ -> Some x | _ -> None) with
+            | Some (User (username, _)) -> $"{username}:***pw***@"
+            | _ ->
+                match this.Parameters |> List.tryPick (fun x -> match x with AuthKey _ -> Some x | _ -> None) with
+                | Some (AuthKey _) -> "****key****@"
+                | _ -> ()
+            $"{this.Hostname}:{this.Port}/{this.Database}/{this.Timeout}"
+        }
+        |> String.concat ""
+    
     /// Parse settings from JSON
     ///
     /// A sample JSON object with all the possible properties filled in:
@@ -89,14 +104,14 @@ type DataConfig =
     static member FromJson json =
         let parsed = JObject.Parse json
         { Parameters =
-            [ match parsed["hostname"] with null -> () | x -> Hostname <| x.Value<string> ()
-              match parsed["port"]     with null -> () | x -> Port     <| x.Value<int>    ()
-              match parsed["auth-key"] with null -> () | x -> AuthKey  <| x.Value<string> ()
-              match parsed["timeout"]  with null -> () | x -> Timeout  <| x.Value<int>    ()
-              match parsed["database"] with null -> () | x -> Database <| x.Value<string> ()
-              match parsed["username"], parsed["password"] with
-              | null, _ | _, null -> () 
-              | userName, password -> User (userName.Value<string> (), password.Value<string> ())
+            [   match parsed["hostname"] with null -> () | x -> Hostname <| x.Value<string> ()
+                match parsed["port"]     with null -> () | x -> Port     <| x.Value<int>    ()
+                match parsed["auth-key"] with null -> () | x -> AuthKey  <| x.Value<string> ()
+                match parsed["timeout"]  with null -> () | x -> Timeout  <| x.Value<int>    ()
+                match parsed["database"] with null -> () | x -> Database <| x.Value<string> ()
+                match parsed["username"], parsed["password"] with
+                | null, _ | _, null -> () 
+                | userName, password -> User (userName.Value<string> (), password.Value<string> ())
             ]
         }
     
@@ -108,11 +123,34 @@ type DataConfig =
     /// Parse settings from application configuration
     static member FromConfiguration (cfg : IConfigurationSection) =
         { Parameters =
-            [ match cfg["hostname"] with null -> () | host -> Hostname host
-              match cfg["port"]     with null -> () | port -> Port (int port)
-              match cfg["auth-key"] with null -> () | key  -> AuthKey key
-              match cfg["timeout"]  with null -> () | time -> Timeout (int time)
-              match cfg["database"] with null -> () | db   -> Database db
-              match cfg["username"], cfg["password"] with null, _ | _, null -> () | user -> User user
+            [   match cfg["hostname"] with null -> () | host -> Hostname host
+                match cfg["port"]     with null -> () | port -> Port (int port)
+                match cfg["auth-key"] with null -> () | key  -> AuthKey key
+                match cfg["timeout"]  with null -> () | time -> Timeout (int time)
+                match cfg["database"] with null -> () | db   -> Database db
+                match cfg["username"], cfg["password"] with null, _ | _, null -> () | user -> User user
+            ]
+        }
+    
+    /// Parse settings from a URI
+    ///
+    /// rethinkdb://user:password@host:port/database/timeout
+    ///   OR
+    /// rethinkdb://authkey@host:port/database/timeout
+    ///
+    /// host is required, database is required if timeout is specified
+    static member FromUri (uri : string) =
+        let it = Uri uri
+        if it.Scheme <> "rethinkdb" then invalidArg "scheme" $"""URI scheme must be "rethinkdb" (was {it.Scheme})"""
+        { Parameters =
+            [   Hostname it.Host
+                if it.Port <> -1 then Port it.Port
+                if it.UserInfo <> "" then
+                    if it.UserInfo.Contains ':' then
+                        let parts = it.UserInfo.Split ':' |> Array.truncate 2
+                        User (parts[0], parts[1])
+                    else AuthKey it.UserInfo
+                if it.Segments.Length > 1 then Database it.Segments[1]
+                if it.Segments.Length > 2 then Timeout (int it.Segments[2])
             ]
         }

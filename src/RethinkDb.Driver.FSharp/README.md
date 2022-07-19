@@ -10,6 +10,8 @@ open RethinkDb.Driver.FSharp
 let dataCfg = DataConfig.fromJson "rethink-config.json"
 // - or -
 let dataCfg = DataConfig.fromConfiguration [config-section]
+// - or -
+let dataCfg = DataConfig.fromUri [connection-string]
 
 let conn = dataCfg.CreateConnection ()  // IConnection
 ```
